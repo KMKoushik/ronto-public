@@ -1,0 +1,5 @@
+packages:
+  - apps/*
+  - packages/*
+patchedDependencies:
+  '@whiskeysockets/baileys@7.0.0-rc14': patches/@whiskeysockets__baileys@7.0.0-rc14.patch

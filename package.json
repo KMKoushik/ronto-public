@@ -1,0 +1,29 @@
+{
+  "packageManager": "pnpm@10.34.4",
+  "type": "module",
+  "name": "ronto",
+  "private": true,
+  "scripts": {
+    "predev": "pnpm --filter @ronto/api build",
+    "dev": "pnpm --parallel --filter @ronto/server --filter @ronto/web dev",
+    "build": "pnpm --recursive --if-present build",
+    "browser:install": "pnpm --filter @ronto/server browser:install",
+    "browser:doctor": "pnpm --filter @ronto/server browser:doctor",
+    "precheck": "pnpm --filter @ronto/api build",
+    "check": "pnpm --recursive --if-present check",
+    "connector:dev": "bash scripts/run-open-connector-local.sh",
+    "db:migrate": "pnpm --filter @ronto/server db:migrate",
+    "storage:migrate": "node --import tsx apps/server/src/storage/migrate-family-storage.ts",
+    "summaries:backfill": "pnpm --filter @ronto/server summaries:backfill",
+    "sandbox:provision": "node --import tsx apps/server/src/sandbox/provision-slots.ts",
+    "lint": "oxlint apps packages",
+    "lint:fix": "oxlint apps packages --fix"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.80.0",
+    "@types/node": "^24.13.3",
+    "oxlint": "1.80.0",
+    "tsx": "^4.23.12",
+    "typescript": "~6.0.3"
+  }
+}

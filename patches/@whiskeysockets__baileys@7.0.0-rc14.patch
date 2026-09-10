@@ -1,0 +1,149 @@
+diff --git a/lib/Socket/messages-recv.js b/lib/Socket/messages-recv.js
+index f2003ac00ef223468c432a1bbe0a0eb02c1453b2..83ae02ce7b4a2b4a4fb46d3252212941433689ad 100644
+--- a/lib/Socket/messages-recv.js
++++ b/lib/Socket/messages-recv.js
+@@ -878,10 +878,15 @@ export const makeMessagesRecvSocket = (config) => {
+                     }
+                 }
+                 break;
+-            case 'link_code_companion_reg':
++            case 'link_code_companion_reg': {
+                 const linkCodeCompanionReg = getBinaryNodeChild(node, 'link_code_companion_reg');
++                const primaryIdentity = getBinaryNodeChildBuffer(linkCodeCompanionReg, 'primary_identity_pub');
++                if (!primaryIdentity) {
++                    logger.debug('link_code_companion_reg notification has no pairing data; ignoring');
++                    break;
++                }
+                 const ref = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_ref'));
+-                const primaryIdentityPublicKey = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'primary_identity_pub'));
++                const primaryIdentityPublicKey = toRequiredBuffer(primaryIdentity);
+                 const primaryEphemeralPublicKeyWrapped = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_wrapped_primary_ephemeral_pub'));
+                 const codePairingPublicKey = await decipherLinkPublicKey(primaryEphemeralPublicKeyWrapped);
+                 const companionSharedKey = Curve.sharedKey(authState.creds.pairingEphemeralKeyPair.private, codePairingPublicKey);
+@@ -940,6 +945,7 @@ export const makeMessagesRecvSocket = (config) => {
+                 authState.creds.registered = true;
+                 ev.emit('creds.update', authState.creds);
+                 break;
++            }
+             case 'privacy_token':
+                 await handlePrivacyTokenNotification(node);
+                 break;
+diff --git a/lib/Socket/socket.js b/lib/Socket/socket.js
+index ae34a8f315a0b9fd101472cc69e59624c6c63861..cf639796bf1da921637251bb85f9489b1ef8d749 100644
+--- a/lib/Socket/socket.js
++++ b/lib/Socket/socket.js
+@@ -599,58 +599,63 @@ export const makeSocket = (config) => {
+             throw new Error('Custom pairing code must be exactly 8 chars');
+         }
+         authState.creds.pairingCode = pairingCode;
+-        authState.creds.me = {
+-            id: jidEncode(phoneNumber, 's.whatsapp.net'),
+-            name: '~'
+-        };
+-        ev.emit('creds.update', authState.creds);
+-        await sendNode({
+-            tag: 'iq',
+-            attrs: {
+-                to: S_WHATSAPP_NET,
+-                type: 'set',
+-                id: generateMessageTag(),
+-                xmlns: 'md'
+-            },
+-            content: [
+-                {
+-                    tag: 'link_code_companion_reg',
+-                    attrs: {
+-                        jid: authState.creds.me.id,
+-                        stage: 'companion_hello',
+-                        should_show_push_notification: 'true'
+-                    },
+-                    content: [
+-                        {
+-                            tag: 'link_code_pairing_wrapped_companion_ephemeral_pub',
+-                            attrs: {},
+-                            content: await generatePairingKey()
+-                        },
+-                        {
+-                            tag: 'companion_server_auth_key_pub',
+-                            attrs: {},
+-                            content: authState.creds.noiseKey.public
+-                        },
+-                        {
+-                            tag: 'companion_platform_id',
+-                            attrs: {},
+-                            content: getCompanionPlatformId(browser)
+-                        },
+-                        {
+-                            tag: 'companion_platform_display',
+-                            attrs: {},
+-                            content: `${browser[1]} (${browser[0]})`
++        const jid = jidEncode(phoneNumber, 's.whatsapp.net');
++        try {
++            await query({
++                tag: 'iq',
++                attrs: {
++                    to: S_WHATSAPP_NET,
++                    type: 'set',
++                    xmlns: 'md'
++                },
++                content: [
++                    {
++                        tag: 'link_code_companion_reg',
++                        attrs: {
++                            jid,
++                            stage: 'companion_hello',
++                            should_show_push_notification: 'true'
+                         },
+-                        {
+-                            tag: 'link_code_pairing_nonce',
+-                            attrs: {},
+-                            content: '0'
+-                        }
+-                    ]
+-                }
+-            ]
+-        });
+-        return authState.creds.pairingCode;
++                        content: [
++                            {
++                                tag: 'link_code_pairing_wrapped_companion_ephemeral_pub',
++                                attrs: {},
++                                content: await generatePairingKey()
++                            },
++                            {
++                                tag: 'companion_server_auth_key_pub',
++                                attrs: {},
++                                content: authState.creds.noiseKey.public
++                            },
++                            {
++                                tag: 'companion_platform_id',
++                                attrs: {},
++                                content: getCompanionPlatformId(browser)
++                            },
++                            {
++                                tag: 'companion_platform_display',
++                                attrs: {},
++                                content: `${browser[1]} (${browser[0]})`
++                            },
++                            {
++                                tag: 'link_code_pairing_nonce',
++                                attrs: {},
++                                content: '0'
++                            }
++                        ]
++                    }
++                ]
++            });
++        }
++        catch (error) {
++            if (authState.creds.pairingCode === pairingCode) {
++                authState.creds.pairingCode = undefined;
++            }
++            throw error;
++        }
++        authState.creds.me = { id: jid, name: '~' };
++        ev.emit('creds.update', authState.creds);
++        return pairingCode;
+     };
+     async function generatePairingKey() {
+         const salt = randomBytes(32);

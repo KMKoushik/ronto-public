@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-browser.dev/schema.json",
+  "contentBoundaries": true,
+  "idleTimeout": "5m",
+  "json": true,
+  "maxOutput": 50000,
+  "namespace": "ronto",
+  "noAutoDialog": true
+}
