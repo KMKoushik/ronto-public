@@ -78,10 +78,10 @@ import {
 } from "../whatsapp/whatsapp-media.ts";
 
 const openCodeGoProviderId = "opencode-go";
-const modelProvider = "openai";
-const modelId = "gpt-5.6-luna";
-const fallbackModelProvider = openCodeGoProviderId;
-const fallbackModelId = "deepseek-flash";
+const modelProvider = openCodeGoProviderId;
+const modelId = "deepseek-flash";
+const fallbackModelProvider = "openai";
+const fallbackModelId = "gpt-5.6-luna";
 const modelHeaders = {
   "HTTP-Referer": "https://ronto.dev",
   "User-Agent": "Ronto/1.0",
@@ -973,7 +973,7 @@ export class AgentService extends Context.Service<
                   conversationId,
                 );
                 fallbackUsed = true;
-                notify(() => observer?.onStatus?.("Retrying with DeepSeek"));
+                notify(() => observer?.onStatus?.("Retrying with Luna"));
                 await agent.continue();
               }
               await raindrop.flush();
