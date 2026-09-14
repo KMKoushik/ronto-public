@@ -425,8 +425,10 @@ export class RontoStore extends Context.Service<
             COALESCE((
               SELECT json_group_array(channel_member.channel_id)
               FROM ronto_channel_member channel_member
+              JOIN ronto_channel channel ON channel.id = channel_member.channel_id
               WHERE channel_member.family_member_id = member.id
                 AND channel_member.left_at IS NULL
+                AND channel.personal_owner_member_id IS NULL
             ), '[]') AS channel_ids_json,
             member.joined_at
           FROM ronto_family_member member
@@ -481,6 +483,9 @@ export class RontoStore extends Context.Service<
             c.created_at,
             c.updated_at
           FROM ronto_conversation c
+          JOIN ronto_channel channel
+            ON channel.id = c.channel_id
+            AND channel.personal_owner_member_id IS NULL
           JOIN ronto_channel_member channel_mine
             ON channel_mine.channel_id = c.channel_id
             AND channel_mine.family_member_id = ${memberId}
@@ -670,6 +675,7 @@ export class RontoStore extends Context.Service<
           FROM ronto_channel c
           JOIN ronto_channel_member cm ON cm.channel_id = c.id
           WHERE cm.family_member_id = ${memberId} AND cm.left_at IS NULL
+            AND c.personal_owner_member_id IS NULL
           ORDER BY c.is_default DESC, c.name COLLATE NOCASE
         `,
       });
@@ -1197,6 +1203,7 @@ export class RontoStore extends Context.Service<
                 SELECT channel.id, ${member.id}, ${now}
                 FROM ronto_channel channel
                 WHERE channel.family_id = ${member.familyId}
+                  AND channel.personal_owner_member_id IS NULL
                   AND (${member.role} = 'primary' OR channel.is_default = 1)
               `;
               yield* sql`
@@ -1233,10 +1240,15 @@ export class RontoStore extends Context.Service<
         const requester = yield* familyMembers.findById(requesterId);
         const member = yield* familyMembers.findById(memberId);
         const channel = yield* channels.findById(channelId);
+        const shared = yield* sql`
+          SELECT id FROM ronto_channel
+          WHERE id = ${channelId} AND personal_owner_member_id IS NULL
+        `;
         if (
           requester.role !== "primary" ||
           requester.familyId !== member.familyId ||
           requester.familyId !== channel.familyId ||
+          shared.length === 0 ||
           (!active && (member.role === "primary" || channel.isDefault))
         )
           return yield* new Cause.NoSuchElementError();

@@ -137,7 +137,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
           token.toLowerCase(),
         ).pipe(Effect.option);
         const text = selected._tag === "Some"
-          ? `Switched this WhatsApp DM to ${selected.value.familyName}. New messages go to General in that family.`
+          ? `Switched this WhatsApp DM to ${selected.value.familyName}. New messages go to your personal channel in that family.`
           : `That family code is unavailable. Use ${commandPrefix} families to list your families.`;
         yield* client.sendText(message.externalChannelId, text).pipe(Effect.ignore);
         return true;

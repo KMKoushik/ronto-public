@@ -148,7 +148,6 @@ const ResolvedApprovalResultRow = Schema.Struct({
 
 const NewConversationContextRow = Schema.Struct({
   familyId: Schema.String,
-  channelId: Schema.String,
   familyMemberId: Schema.String,
 });
 
@@ -462,15 +461,8 @@ export class WhatsappStore extends Context.Service<
       const selectDmFamilyForMember = Effect.fn("WhatsappStore.selectDmFamilyForMember")(
         function* (memberId: Id, at: DateTime.Utc) {
           const contexts = yield* sql`
-            SELECT member.family_id, channel.id AS channel_id,
-              member.id AS family_member_id
+            SELECT member.family_id, member.id AS family_member_id
             FROM ronto_family_member member
-            JOIN ronto_channel channel ON channel.family_id = member.family_id
-              AND channel.is_default = 1
-            JOIN ronto_channel_member channel_membership
-              ON channel_membership.channel_id = channel.id
-              AND channel_membership.family_member_id = member.id
-              AND channel_membership.left_at IS NULL
             WHERE member.id = ${memberId}
             LIMIT 1
           `;
@@ -482,12 +474,34 @@ export class WhatsappStore extends Context.Service<
           `;
           const userId = users[0]?.userId;
           if (userId === undefined) return yield* notFound();
+          const now = iso(at);
+          let personalChannels = yield* sql<{ channelId: string }>`
+            SELECT id AS channel_id FROM ronto_channel
+            WHERE personal_owner_member_id = ${memberId}
+          `;
+          if (personalChannels.length === 0) {
+            const channelId = randomUUID();
+            yield* sql`INSERT INTO ronto_channel (
+              id, family_id, name, purpose, is_default, created_at, updated_at,
+              personal_owner_member_id
+            ) VALUES (
+              ${channelId}, ${context.familyId}, ${`Personal ${memberId}`},
+              'Personal direct conversations', 0, ${now}, ${now}, ${memberId}
+            )`;
+            yield* sql`INSERT INTO ronto_channel_member (
+              channel_id, family_member_id, joined_at
+            ) VALUES (${channelId}, ${memberId}, ${now})`;
+            personalChannels = [{ channelId }];
+          }
+          const channelId = personalChannels[0]?.channelId;
+          if (channelId === undefined) return yield* notFound();
           const existing = yield* sql<{ conversationId: string }>`
             SELECT selection.conversation_id
             FROM ronto_whatsapp_dm_selection selection
             JOIN ronto_conversation conversation
               ON conversation.id = selection.conversation_id
               AND conversation.status = 'active'
+              AND conversation.channel_id = ${channelId}
             JOIN ronto_conversation_member participant
               ON participant.conversation_id = conversation.id
               AND participant.family_member_id = ${memberId}
@@ -503,13 +517,11 @@ export class WhatsappStore extends Context.Service<
               created_at, updated_at, archived_at, channel_id
             ) VALUES (
               ${conversationId}, ${context.familyId}, NULL, 'active',
-              ${memberId}, ${iso(at)}, ${iso(at)}, NULL, ${context.channelId}
+              ${memberId}, ${now}, ${now}, NULL, ${channelId}
             )`;
             yield* sql`INSERT INTO ronto_conversation_member (
               conversation_id, family_member_id, joined_at
-            ) SELECT ${conversationId}, family_member_id, ${iso(at)}
-              FROM ronto_channel_member
-              WHERE channel_id = ${context.channelId} AND left_at IS NULL`;
+            ) VALUES (${conversationId}, ${memberId}, ${now})`;
           }
           yield* sql`INSERT INTO ronto_whatsapp_dm_selection (
             user_id, family_id, conversation_id, updated_at
