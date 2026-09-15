@@ -9,6 +9,16 @@ This repository is a source snapshot. It deliberately excludes the private
 deployment runbook, production infrastructure configuration, operational state,
 and credentials used by the hosted Ronto instance.
 
+## Mirror relationship
+
+This repository is a curated public mirror of Ronto's private development
+repository. Applicable product and source changes are ported here, while
+private operations material, credentials, and family data remain excluded.
+
+The public mirror intentionally uses GPT-5.6 Luna as its primary model, with
+DeepSeek Flash as fallback. This model policy may differ from the private
+deployment and should be preserved when syncing unrelated changes.
+
 ## Development
 
 Requirements:

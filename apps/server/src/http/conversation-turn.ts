@@ -21,6 +21,7 @@ import {
   type AgentResponseMode,
   type AgentTurnSource,
   type AgentGenerationObserver,
+  type WhatsappReactionEmoji,
 } from "../agent/agent-service.ts";
 import { ChannelWorkspace } from "../agent/channel-workspace.ts";
 import type { AgentRun, Message } from "../db/models.ts";
@@ -54,6 +55,12 @@ export type ConversationTurnOutcome =
   | ({ readonly disposition: "respond" } & ConversationTurnResult)
   | {
       readonly disposition: "silent";
+      readonly memberMessage: Message;
+      readonly run: AgentRun;
+    }
+  | {
+      readonly disposition: "react";
+      readonly emoji: WhatsappReactionEmoji;
       readonly memberMessage: Message;
       readonly run: AgentRun;
     };
@@ -322,6 +329,22 @@ export class ConversationTurn extends Context.Service<
                         run: completedRun,
                       } as const;
                     }
+                    if (response.disposition === "react") {
+                      const completedRun = yield* store
+                        .succeedAgentRun(agentRun.id)
+                        .pipe(Effect.orDie);
+                      yield* cleanupRunFiles(
+                        memberId,
+                        conversationId,
+                        agentRun.id,
+                      );
+                      return {
+                        disposition: "react",
+                        emoji: response.emoji,
+                        memberMessage,
+                        run: completedRun,
+                      } as const;
+                    }
                     const agentMessage = yield* store
                       .appendAgentMessage(
                         conversationId,
@@ -399,8 +422,8 @@ export class ConversationTurn extends Context.Service<
           payload,
           options,
         );
-        if (outcome.disposition === "silent") {
-          return yield* Effect.die("A required web turn completed silently");
+        if (outcome.disposition !== "respond") {
+          return yield* Effect.die("A required web turn completed without a response");
         }
         return {
           memberMessage: outcome.memberMessage,

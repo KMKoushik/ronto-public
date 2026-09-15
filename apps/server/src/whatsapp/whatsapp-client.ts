@@ -52,6 +52,11 @@ export interface WhatsappQuote {
   readonly text: string;
 }
 
+export interface WhatsappReactionTarget {
+  readonly externalMessageId: string;
+  readonly senderExternalId: string;
+}
+
 export interface WhatsappFileDelivery {
   readonly kind: "image" | "document";
   readonly bytes: Uint8Array;
@@ -172,6 +177,11 @@ export class WhatsappClient extends Context.Service<
       text: string,
       quote?: WhatsappQuote,
     ) => Effect.Effect<string, WhatsappClientError>;
+    readonly sendReaction: (
+      externalChannelId: string,
+      emoji: string,
+      target: WhatsappReactionTarget,
+    ) => Effect.Effect<string, WhatsappClientError>;
     readonly setTyping: (
       externalChannelId: string,
       typing: boolean,
@@ -211,6 +221,13 @@ export class WhatsappClient extends Context.Service<
               }),
             ),
           sendApproval: () =>
+            Effect.fail(
+              new WhatsappClientError({
+                message: "WhatsApp is disabled",
+                retryable: false,
+              }),
+            ),
+          sendReaction: () =>
             Effect.fail(
               new WhatsappClientError({
                 message: "WhatsApp is disabled",
@@ -539,6 +556,20 @@ export class WhatsappClient extends Context.Service<
         sendText: (externalChannelId, text, quote) =>
           send(externalChannelId, { text }, quote),
         sendApproval,
+        sendReaction: (externalChannelId, emoji, target) =>
+          send(externalChannelId, {
+            react: {
+              text: emoji,
+              key: {
+                id: target.externalMessageId,
+                remoteJid: externalChannelId,
+                fromMe: false,
+                participant: isJidGroup(externalChannelId)
+                  ? target.senderExternalId
+                  : null,
+              },
+            },
+          }),
         setTyping: (externalChannelId, typing) =>
           Effect.tryPromise({
             try: async () => {

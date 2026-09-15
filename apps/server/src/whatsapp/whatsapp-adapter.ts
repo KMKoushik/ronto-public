@@ -479,6 +479,17 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
         yield* store.markSilent(inbox.id).pipe(Effect.orDie);
         return;
       }
+      if (outcome.disposition === "react") {
+        if (inbox.responseMode === "required") {
+          return yield* Effect.die("A required WhatsApp turn completed with a reaction");
+        }
+        yield* store.completeReacted({
+          inboxId: inbox.id,
+          externalChannelId: inbox.externalChannelId,
+          emoji: outcome.emoji,
+        }).pipe(Effect.orDie);
+        return;
+      }
       const deliveries = renderWhatsappDeliveries(
         outcome.agentMessage.contentJson,
       );
@@ -516,6 +527,16 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
       outbox: WhatsappOutbox,
     ) {
       const quote = quoteFor(outbox);
+      if (outbox.deliveryKind === "reaction") {
+        return yield* client.sendReaction(
+          outbox.externalChannelId,
+          outbox.text,
+          {
+            externalMessageId: outbox.sourceExternalMessageId,
+            senderExternalId: outbox.sourceSenderExternalId,
+          },
+        );
+      }
       if (outbox.approvalId !== null) {
         return yield* client.sendApproval(
           outbox.externalChannelId,

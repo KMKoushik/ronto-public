@@ -58,13 +58,13 @@ const InboxRow = Schema.Struct({
 const OutboxRow = Schema.Struct({
   id: Schema.String,
   inboxId: Schema.String,
-  assistantMessageId: Schema.String,
+  assistantMessageId: Schema.NullOr(Schema.String),
   externalChannelId: Schema.String,
   sourceExternalMessageId: Schema.String,
   sourceSenderExternalId: Schema.String,
   sourceText: Schema.String,
   partIndex: Schema.Int,
-  deliveryKind: Schema.Literals(["text", "file"]),
+  deliveryKind: Schema.Literals(["text", "file", "reaction"]),
   approvalId: Schema.NullOr(Schema.String),
   fileId: Schema.NullOr(Schema.String),
   fileChannelId: Schema.NullOr(Schema.String),
@@ -189,6 +189,13 @@ export interface OutboxDeliveriesInput {
         readonly text: string;
       }
   >;
+  readonly at?: DateTime.Utc;
+}
+
+export interface OutboxReactionInput {
+  readonly inboxId: Id;
+  readonly externalChannelId: string;
+  readonly emoji: string;
   readonly at?: DateTime.Utc;
 }
 
@@ -373,6 +380,9 @@ export class WhatsappStore extends Context.Service<
     readonly completeResponded: (
       input: OutboxDeliveriesInput,
     ) => Effect.Effect<ReadonlyArray<WhatsappOutbox>, StoreError>;
+    readonly completeReacted: (
+      input: OutboxReactionInput,
+    ) => Effect.Effect<WhatsappOutbox, StoreError>;
     readonly claimDueOutbox: (
       at?: DateTime.Utc,
     ) => Effect.Effect<WhatsappOutbox | null, StoreError>;
@@ -1621,6 +1631,43 @@ export class WhatsappStore extends Context.Service<
               `;
               if (responded.length === 0) return yield* notFound();
               return outbox;
+            }),
+          ),
+        completeReacted: (input) =>
+          sql.withTransaction(
+            Effect.gen(function* () {
+              const at = input.at ?? (yield* DateTime.now);
+              const inserted = yield* sql`
+                INSERT INTO ronto_whatsapp_outbox (
+                  id, inbox_id, assistant_message_id, external_channel_id,
+                  part_index, delivery_kind, file_id, approval_id, text, status,
+                  attempt_count, next_attempt_at, created_at, updated_at
+                )
+                SELECT
+                  ${randomUUID()}, inbox.id, NULL, inbox.external_channel_id,
+                  0, 'reaction', NULL, NULL, ${input.emoji}, 'pending',
+                  0, ${iso(at)}, ${iso(at)}, ${iso(at)}
+                FROM ronto_whatsapp_inbox inbox
+                WHERE inbox.id = ${input.inboxId}
+                  AND inbox.external_channel_id = ${input.externalChannelId}
+                  AND inbox.response_mode = 'optional'
+                  AND inbox.status = 'processing'
+                ON CONFLICT (inbox_id, part_index) DO NOTHING
+                RETURNING id
+              `;
+              if (inserted.length === 0) return yield* notFound();
+              const responded = yield* sql`
+                UPDATE ronto_whatsapp_inbox
+                SET status = 'responded', error = NULL, updated_at = ${iso(at)}
+                WHERE id = ${input.inboxId} AND status = 'processing'
+                RETURNING id
+              `;
+              if (responded.length === 0) return yield* notFound();
+              const outbox = yield* listOutbox(input.inboxId);
+              const reaction = outbox.find((delivery) =>
+                delivery.deliveryKind === "reaction"
+              );
+              return reaction ?? (yield* notFound());
             }),
           ),
         claimDueOutbox: (requestedAt) =>
