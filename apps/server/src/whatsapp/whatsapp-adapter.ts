@@ -304,6 +304,32 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
         return;
       }
       if (yield* consumeCommand(message)) return;
+      if (message.group && message.triggerKind === "mention") {
+        const groupName = yield* client
+          .getGroupSubject(message.externalChannelId)
+          .pipe(Effect.orElseSucceed(() => "WhatsApp group"));
+        const created = yield* store
+          .automaticallyBindGroup(
+            message.senderAliases,
+            message.externalChannelId,
+            groupName,
+          )
+          .pipe(
+            Effect.catch((cause) =>
+              isNoSuchElement(cause)
+                ? Effect.succeed(false)
+                : Effect.logWarning("Automatic WhatsApp group binding failed").pipe(
+                    Effect.as(false),
+                  ),
+            ),
+          );
+        if (created) {
+          yield* client.sendText(
+            message.externalChannelId,
+            `Created the ${groupName} channel and linked this WhatsApp group.`,
+          ).pipe(Effect.ignore);
+        }
+      }
       const input = {
         externalChannelId: message.externalChannelId,
         externalMessageId: message.externalMessageId,

@@ -42,6 +42,8 @@ export class WhatsappClientError extends Schema.TaggedError<WhatsappClientError>
   { message: Schema.String, retryable: Schema.Boolean },
 ) {}
 
+const WhatsappGroupMetadata = Schema.Struct({ subject: Schema.String });
+
 type MessageListener = (
   message: NormalizedWhatsappMessage,
 ) => void | Promise<void>;
@@ -186,6 +188,9 @@ export class WhatsappClient extends Context.Service<
       externalChannelId: string,
       typing: boolean,
     ) => Effect.Effect<void, WhatsappClientError>;
+    readonly getGroupSubject: (
+      externalChannelId: string,
+    ) => Effect.Effect<string, WhatsappClientError>;
     readonly downloadMedia: (
       media: NormalizedWhatsappMedia,
     ) => Effect.Effect<DownloadedWhatsappMedia, WhatsappClientError>;
@@ -235,6 +240,13 @@ export class WhatsappClient extends Context.Service<
               }),
             ),
           setTyping: () => Effect.void,
+          getGroupSubject: () =>
+            Effect.fail(
+              new WhatsappClientError({
+                message: "WhatsApp is disabled",
+                retryable: false,
+              }),
+            ),
           downloadMedia: () =>
             Effect.fail(
               new WhatsappClientError({
@@ -589,6 +601,35 @@ export class WhatsappClient extends Context.Service<
                 ? cause
                 : new WhatsappClientError({
                     message: "Could not update WhatsApp typing presence",
+                    retryable: true,
+                  }),
+          }),
+        getGroupSubject: (externalChannelId) =>
+          Effect.tryPromise({
+            try: async () => {
+              if (status !== "connected" || socket === undefined) {
+                throw new WhatsappClientError({
+                  message: "WhatsApp is not connected",
+                  retryable: true,
+                });
+              }
+              const metadata = await Schema.decodeUnknownPromise(
+                WhatsappGroupMetadata,
+              )(await socket.groupMetadata(externalChannelId));
+              const subject = metadata.subject.replace(/\s+/g, " ").trim();
+              if (subject.length === 0 || subject.length > 256) {
+                throw new WhatsappClientError({
+                  message: "WhatsApp returned an invalid group name",
+                  retryable: false,
+                });
+              }
+              return subject;
+            },
+            catch: (cause) =>
+              cause instanceof WhatsappClientError
+                ? cause
+                : new WhatsappClientError({
+                    message: "Could not read the WhatsApp group name",
                     retryable: true,
                   }),
           }),

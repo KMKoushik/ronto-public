@@ -292,6 +292,11 @@ export class WhatsappStore extends Context.Service<
       senderAliases: ReadonlyArray<string>,
       externalChannelId: string,
     ) => Effect.Effect<WhatsappClaim, StoreError>;
+    readonly automaticallyBindGroup: (
+      senderAliases: ReadonlyArray<string>,
+      externalChannelId: string,
+      groupName: string,
+    ) => Effect.Effect<boolean, StoreError>;
     readonly listIdentities: (
       requesterId: Id,
     ) => Effect.Effect<ReadonlyArray<WhatsappIdentity>, StoreError>;
@@ -998,6 +1003,88 @@ export class WhatsappStore extends Context.Service<
                 ...claim,
                 claimedAt,
               };
+            }),
+          ),
+        automaticallyBindGroup: (senderAliases, externalChannelId, groupName) =>
+          sql.withTransaction(
+            Effect.gen(function* () {
+              const existing = yield* sql`
+                SELECT id FROM ronto_conversation_binding
+                WHERE adapter = 'whatsapp'
+                  AND external_channel_id = ${externalChannelId}
+                  AND external_thread_id = ''
+                LIMIT 1
+              `;
+              if (existing.length > 0) return false;
+
+              const aliases = [...new Set(senderAliases)];
+              if (aliases.length === 0) return yield* notFound();
+              const contexts = yield* sql`
+                SELECT DISTINCT selection.family_id, member.id AS family_member_id
+                FROM ronto_external_identity identity
+                JOIN ronto_whatsapp_dm_selection selection
+                  ON selection.user_id = identity.user_id
+                JOIN ronto_family_member member
+                  ON member.user_id = identity.user_id
+                  AND member.family_id = selection.family_id
+                  AND member.role = 'primary'
+                WHERE identity.adapter = 'whatsapp'
+                  AND identity.external_user_id IN ${sql.in(aliases)}
+              `;
+              if (contexts.length !== 1 || contexts[0] === undefined) {
+                return yield* notFound();
+              }
+              const context = yield* Schema.decodeUnknownEffect(
+                NewConversationContextRow,
+              )(contexts[0]);
+              const at = yield* DateTime.now;
+              const now = iso(at);
+              const channelId = randomUUID();
+              const conversationId = randomUUID();
+              const trimmedName = groupName.trim().slice(0, 256);
+              if (trimmedName.length === 0) return yield* notFound();
+              const duplicateNames = yield* sql`
+                SELECT id FROM ronto_channel
+                WHERE family_id = ${context.familyId}
+                  AND lower(name) = lower(${trimmedName})
+                LIMIT 1
+              `;
+              const channelName = duplicateNames.length === 0
+                ? trimmedName
+                : `${trimmedName.slice(0, 230)} (WhatsApp ${channelId.slice(0, 8)})`;
+
+              yield* sql`INSERT INTO ronto_channel (
+                id, family_id, name, purpose, is_default, created_at, updated_at
+              ) VALUES (
+                ${channelId}, ${context.familyId}, ${channelName},
+                'WhatsApp group', 0, ${now}, ${now}
+              )`;
+              yield* sql`INSERT INTO ronto_channel_member (
+                channel_id, family_member_id, joined_at
+              ) SELECT ${channelId}, member.id, ${now}
+                FROM ronto_family_member member
+                WHERE member.family_id = ${context.familyId}
+                  AND member.role = 'primary'`;
+              yield* sql`INSERT INTO ronto_conversation (
+                id, family_id, channel_id, title, status, created_by_member_id,
+                created_at, updated_at, archived_at
+              ) VALUES (
+                ${conversationId}, ${context.familyId}, ${channelId}, NULL,
+                'active', ${context.familyMemberId}, ${now}, ${now}, NULL
+              )`;
+              yield* sql`INSERT INTO ronto_conversation_member (
+                conversation_id, family_member_id, joined_at
+              ) SELECT ${conversationId}, family_member_id, ${now}
+                FROM ronto_channel_member
+                WHERE channel_id = ${channelId} AND left_at IS NULL`;
+              yield* sql`INSERT INTO ronto_conversation_binding (
+                id, conversation_id, adapter, external_channel_id,
+                external_thread_id, created_at
+              ) VALUES (
+                ${randomUUID()}, ${conversationId}, 'whatsapp',
+                ${externalChannelId}, '', ${now}
+              )`;
+              return true;
             }),
           ),
         listIdentities: (requesterId) =>
