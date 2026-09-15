@@ -109,6 +109,11 @@ const StoredSessionSummaryRow = Schema.Struct({
   updatedAt: Schema.String,
 });
 
+export const FamilyMemoryMaintenanceJob = Schema.Struct({
+  familyId: FamilyId,
+  attemptCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+
 const FamilyMemberSummaryRow = Schema.Struct({
   id: FamilyMemberId,
   role: Schema.Literals(["primary", "member"]),
@@ -224,6 +229,20 @@ export class RontoStore extends Context.Service<
       nextAttemptAt: DateTime.Utc,
     ): Effect.Effect<void, StoreError>;
     enqueueSessionSummaryBackfill(limit: number): Effect.Effect<number, StoreError>;
+    claimFamilyMemoryMaintenance(
+      at: DateTime.Utc,
+    ): Effect.Effect<typeof FamilyMemoryMaintenanceJob.Type | null, StoreError>;
+    completeFamilyMemoryMaintenance(
+      job: typeof FamilyMemoryMaintenanceJob.Type,
+      modelProvider: string | null,
+      modelId: string | null,
+      nextAttemptAt: DateTime.Utc,
+    ): Effect.Effect<void, StoreError>;
+    retryFamilyMemoryMaintenance(
+      job: typeof FamilyMemoryMaintenanceJob.Type,
+      error: string,
+      nextAttemptAt: DateTime.Utc,
+    ): Effect.Effect<void, StoreError>;
     createFamilyInvite(
       requesterId: FamilyMemberId,
       inviteId: string,
@@ -1155,6 +1174,72 @@ export class RontoStore extends Context.Service<
         },
       );
 
+      const claimFamilyMemoryMaintenance = Effect.fn("RontoStore.claimFamilyMemoryMaintenance")(
+        function* (at: DateTime.Utc) {
+          return yield* sql.withTransaction(Effect.gen(function* () {
+            const now = DateTime.formatIso(at);
+            yield* sql`INSERT INTO ronto_family_memory_maintenance (
+                family_id, status, attempt_count, next_attempt_at, created_at, updated_at
+              ) SELECT family.id, 'pending', 0, ${now}, ${now}, ${now}
+              FROM ronto_family family
+              WHERE NOT EXISTS (SELECT 1 FROM ronto_family_memory_maintenance maintenance
+                WHERE maintenance.family_id = family.id)`;
+            yield* sql`UPDATE ronto_family_memory_maintenance
+              SET status = 'pending', claimed_at = NULL, updated_at = ${now},
+                next_attempt_at = ${now}, last_error = 'Memory maintenance claim expired after restart or interruption'
+              WHERE status = 'running' AND claimed_at IS NOT NULL
+                AND CAST(strftime('%s', ${now}) AS INTEGER) - CAST(strftime('%s', claimed_at) AS INTEGER) >= 900`;
+            const rows = yield* sql`
+              UPDATE ronto_family_memory_maintenance
+              SET status = 'running', claimed_at = ${now}, updated_at = ${now}
+              WHERE family_id = (
+                SELECT family_id FROM ronto_family_memory_maintenance
+                WHERE status = 'pending' AND next_attempt_at <= ${now}
+                  AND NOT EXISTS (SELECT 1 FROM ronto_agent_run active
+                    WHERE active.status IN ('pending', 'running'))
+                ORDER BY next_attempt_at, created_at, family_id LIMIT 1
+              )
+              RETURNING family_id, attempt_count
+            `;
+            const row = rows[0];
+            return row === undefined
+              ? null
+              : yield* Schema.decodeUnknownEffect(FamilyMemoryMaintenanceJob)(row);
+          }));
+        },
+      );
+
+      const completeFamilyMemoryMaintenance = Effect.fn("RontoStore.completeFamilyMemoryMaintenance")(
+        function* (
+          job: typeof FamilyMemoryMaintenanceJob.Type,
+          modelProvider: string | null,
+          modelId: string | null,
+          nextAttemptAt: DateTime.Utc,
+        ) {
+          const now = DateTime.formatIso(yield* DateTime.now);
+          yield* sql`UPDATE ronto_family_memory_maintenance SET
+            status = 'pending', attempt_count = 0, next_attempt_at = ${DateTime.formatIso(nextAttemptAt)},
+            claimed_at = NULL, reviewed_at = ${now}, last_error = NULL,
+            model_provider = ${modelProvider}, model_id = ${modelId}, updated_at = ${now}
+            WHERE family_id = ${job.familyId} AND status = 'running'`;
+        },
+      );
+
+      const retryFamilyMemoryMaintenance = Effect.fn("RontoStore.retryFamilyMemoryMaintenance")(
+        function* (
+          job: typeof FamilyMemoryMaintenanceJob.Type,
+          error: string,
+          nextAttemptAt: DateTime.Utc,
+        ) {
+          const now = DateTime.formatIso(yield* DateTime.now);
+          yield* sql`UPDATE ronto_family_memory_maintenance SET
+            status = 'pending', attempt_count = attempt_count + 1,
+            next_attempt_at = ${DateTime.formatIso(nextAttemptAt)}, claimed_at = NULL,
+            last_error = ${error.slice(0, 4_000)}, updated_at = ${now}
+            WHERE family_id = ${job.familyId} AND status = 'running'`;
+        },
+      );
+
       const createFamilyInvite = Effect.fn("RontoStore.createFamilyInvite")(
         function* (
           requesterId: FamilyMemberId,
@@ -1800,6 +1885,9 @@ export class RontoStore extends Context.Service<
         completeSessionSummary,
         retrySessionSummary,
         enqueueSessionSummaryBackfill,
+        claimFamilyMemoryMaintenance,
+        completeFamilyMemoryMaintenance,
+        retryFamilyMemoryMaintenance,
         createFamilyInvite,
         redeemFamilyInvite,
         setChannelMemberAccess,

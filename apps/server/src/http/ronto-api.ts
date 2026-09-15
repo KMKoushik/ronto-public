@@ -66,6 +66,7 @@ import { ConversationTurn } from "./conversation-turn.ts";
 import { cancelActiveTurn, hasActiveTurn } from "./active-turns.ts";
 import { WhatsappAdapterLive } from "../whatsapp/whatsapp-adapter.ts";
 import { SessionSummaryWorkerLive } from "../agent/session-summary-worker.ts";
+import { FamilyMemoryMaintenanceWorkerLive } from "../agent/family-memory-maintenance-worker.ts";
 import { WhatsappAuth } from "../whatsapp/whatsapp-auth-state.ts";
 import {
   WhatsappClient,
@@ -1022,6 +1023,10 @@ export const ConversationTurnLive = ConversationTurn.layer.pipe(
 export const SessionSummaryRuntimeLive = SessionSummaryWorkerLive.pipe(
   Layer.provide(AgentServiceLive),
   Layer.provide(RontoStore.layer),
+);
+export const FamilyMemoryMaintenanceRuntimeLive = FamilyMemoryMaintenanceWorkerLive.pipe(
+  Layer.provide(AgentServiceLive),
+  Layer.provide([RontoStore.layer, ChannelWorkspaceLive]),
 );
 
 export const WhatsappStoreLive = WhatsappStore.layer;

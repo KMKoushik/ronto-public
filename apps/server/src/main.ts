@@ -17,6 +17,7 @@ import {
   RontoApiHandlers,
   AdmissionApiHandlers,
   SessionSummaryRuntimeLive,
+  FamilyMemoryMaintenanceRuntimeLive,
 } from "./http/ronto-api.ts";
 import { ConversationStreamRoutes } from "./http/conversation-stream.ts";
 
@@ -98,6 +99,7 @@ const Routes = Layer.mergeAll(
   ConversationStreamRoutes,
   ApiRoutes,
   SessionSummaryRuntimeLive,
+  FamilyMemoryMaintenanceRuntimeLive,
 ).pipe(
   Layer.provide(
     HttpRouter.cors({
