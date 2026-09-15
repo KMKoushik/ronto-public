@@ -104,6 +104,10 @@ const RevokedRuntimeToken = Schema.Struct({
   id: Schema.String,
   revoked: Schema.Literal(true),
 });
+const DeletedTransitFile = Schema.Struct({
+  fileId: Schema.String,
+  deleted: Schema.Boolean,
+});
 
 const decodeConnections = Schema.decodeUnknownEffect(ConnectionsResponse);
 const decodeActions = Schema.decodeUnknownEffect(ActionsResponse);
@@ -119,6 +123,7 @@ const decodeAdminConnections = Schema.decodeUnknownEffect(
 const decodeOAuthAuthorization = Schema.decodeUnknownEffect(OAuthAuthorization);
 const decodeOAuthConfigs = Schema.decodeUnknownEffect(Schema.Array(OAuthConfig));
 const decodeRevokedRuntimeToken = Schema.decodeUnknownEffect(RevokedRuntimeToken);
+const decodeDeletedTransitFile = Schema.decodeUnknownEffect(DeletedTransitFile);
 
 export type OpenConnectorAdminConnection = typeof AdminConnection.Type;
 export type OpenConnectorOAuthAuthorization = typeof OAuthAuthorization.Type;
@@ -169,6 +174,47 @@ const readBoundedJson = async (response: Response): Promise<Schema.Json> => {
   return Schema.decodeUnknownSync(Schema.Json)(
     JSON.parse(new TextDecoder().decode(bytes)),
   );
+};
+
+class TransitFileTooLargeError extends Error {}
+
+const readBoundedBytes = async (
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array> => {
+  const contentLength = response.headers.get("content-length");
+  if (
+    contentLength !== null &&
+    Number.parseInt(contentLength, 10) > maxBytes
+  ) {
+    await response.body?.cancel();
+    throw new TransitFileTooLargeError();
+  }
+  if (response.body === null) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Array<Uint8Array> = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      byteLength += chunk.value.byteLength;
+      if (byteLength > maxBytes) {
+        await reader.cancel();
+        throw new TransitFileTooLargeError();
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const content = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    content.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return content;
 };
 
 const makeOpenConnectorClient = (
@@ -378,6 +424,78 @@ const makeOpenConnectorClient = (
     );
   });
 
+  const readTransitFile = Effect.fn("OpenConnectorClient.readTransitFile")(function* (
+    adminToken: string,
+    fileId: string,
+    maxBytes: number,
+  ) {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+      return yield* new OpenConnectorClientError({
+        operation: "read transit file",
+        status: null,
+        code: "invalid_file_limit",
+        cause: new Error("Transit file limit must be a non-negative safe integer"),
+      });
+    }
+    const response = yield* Effect.tryPromise({
+      try: (signal) => request(
+        `${baseUrl}/api/files/${encodeURIComponent(fileId)}`,
+        {
+          method: "GET",
+          headers: new Headers({ Authorization: `Bearer ${adminToken}` }),
+          signal,
+        },
+      ),
+      catch: (cause) => new OpenConnectorClientError({
+        operation: "read transit file",
+        status: null,
+        code: null,
+        cause,
+      }),
+    });
+    if (!response.ok) {
+      return yield* new OpenConnectorClientError({
+        operation: "read transit file",
+        status: response.status,
+        code: null,
+        cause: new Error("OpenConnector rejected the transit file download"),
+      });
+    }
+    const content = yield* Effect.tryPromise({
+      try: () => readBoundedBytes(response, maxBytes),
+      catch: (cause) => new OpenConnectorClientError({
+        operation: "read transit file",
+        status: cause instanceof TransitFileTooLargeError ? 413 : response.status,
+        code: cause instanceof TransitFileTooLargeError ? "file_too_large" : null,
+        cause,
+      }),
+    });
+    return content;
+  });
+
+  const deleteTransitFile = Effect.fn("OpenConnectorClient.deleteTransitFile")(function* (
+    adminToken: string,
+    fileId: string,
+  ) {
+    const payload = yield* call(
+      "delete transit file",
+      "DELETE",
+      `/api/files/${encodeURIComponent(fileId)}`,
+      undefined,
+      undefined,
+      undefined,
+      adminToken,
+    );
+    yield* decodeDeletedTransitFile(payload).pipe(
+      Effect.mapError((cause) => new OpenConnectorClientError({
+        operation: "delete transit file",
+        status: 200,
+        code: null,
+        cause,
+      })),
+    );
+  });
+
   const createRuntimeToken = Effect.fn(
     "OpenConnectorClient.createRuntimeToken",
   )(function* (
@@ -575,6 +693,8 @@ const makeOpenConnectorClient = (
     searchActions,
     getAction,
     execute,
+    readTransitFile,
+    deleteTransitFile,
     createRuntimeToken,
     updateRuntimeToken,
     revokeRuntimeToken,
@@ -616,6 +736,15 @@ export class OpenConnectorClient extends Context.Service<
       connectionName: string,
       idempotencyKey: string,
     ): Effect.Effect<Schema.Json, OpenConnectorClientError>;
+    readTransitFile(
+      adminToken: string,
+      fileId: string,
+      maxBytes: number,
+    ): Effect.Effect<Uint8Array, OpenConnectorClientError>;
+    deleteTransitFile(
+      adminToken: string,
+      fileId: string,
+    ): Effect.Effect<void, OpenConnectorClientError>;
     createRuntimeToken(
       adminToken: string,
       name: string,

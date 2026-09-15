@@ -973,6 +973,7 @@ const ConnectorServiceLive: Layer.Layer<
         connectorServices.size > 0
       ? ConnectorService.layer(
           connectorUrl,
+          connectorAdminToken,
           connectorEncryptionKey,
           connectorServices,
         ).pipe(Layer.provide(ConnectorStore.layer))

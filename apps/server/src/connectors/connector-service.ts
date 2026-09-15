@@ -180,6 +180,11 @@ export class ConnectorService extends Context.Service<
       input: Schema.JsonObject,
       idempotencyKey: string,
     ): Effect.Effect<Schema.Json, ConnectorServiceError>;
+    readTransitFile(
+      fileId: string,
+      maxBytes: number,
+    ): Effect.Effect<Uint8Array, ConnectorServiceError>;
+    deleteTransitFile(fileId: string): Effect.Effect<void, ConnectorServiceError>;
   }
 >()("ronto/connectors/ConnectorService") {
   static readonly disabled = Layer.succeed(
@@ -213,11 +218,28 @@ export class ConnectorService extends Context.Service<
             cause: null,
           }),
         ),
+      readTransitFile: () =>
+        Effect.fail(
+          new ConnectorServiceError({
+            reason: "disabled",
+            message: "Connectors are not enabled",
+            cause: null,
+          }),
+        ),
+      deleteTransitFile: () =>
+        Effect.fail(
+          new ConnectorServiceError({
+            reason: "disabled",
+            message: "Connectors are not enabled",
+            cause: null,
+          }),
+        ),
     }),
   );
 
   static layer(
     baseUrl: string,
+    adminToken: string,
     encodedEncryptionKey: string,
     allowedServices: ReadonlySet<string>,
     request: OpenConnectorRequest = fetch,
@@ -507,6 +529,22 @@ export class ConnectorService extends Context.Service<
                 ),
               );
           }),
+          readTransitFile: (fileId, maxBytes) =>
+            client.readTransitFile(adminToken, fileId, maxBytes).pipe(
+              Effect.mapError((cause) => new ConnectorServiceError({
+                reason: "gateway_failed",
+                message: "The connector transit file could not be read",
+                cause,
+              })),
+            ),
+          deleteTransitFile: (fileId) =>
+            client.deleteTransitFile(adminToken, fileId).pipe(
+              Effect.mapError((cause) => new ConnectorServiceError({
+                reason: "gateway_failed",
+                message: "The connector transit file could not be deleted",
+                cause,
+              })),
+            ),
         });
       }).pipe(Effect.provide(clientLayer)),
     );

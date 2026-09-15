@@ -1,0 +1,166 @@
+diff --git a/src/providers/gmail/actions.ts b/src/providers/gmail/actions.ts
+index d47c7b2..862029f 100644
+--- a/src/providers/gmail/actions.ts
++++ b/src/providers/gmail/actions.ts
+@@ -22,6 +22,7 @@ const maxResults = s.integer({
+   description: "Maximum number of results to return.",
+ });
+ const messageId = s.string({ minLength: 1, description: "Gmail message ID." });
++const attachmentId = s.string({ minLength: 1, description: "Gmail attachment ID." });
+ const threadId = s.string({ minLength: 1, description: "Gmail thread ID." });
+ const draftId = s.string({ minLength: 1, description: "Gmail draft ID." });
+ const labelId = s.string({ minLength: 1, description: "Gmail label ID." });
+@@ -262,6 +263,33 @@ export const gmailActions: ActionDefinition[] = [
+     required: ["messageId"],
+     outputSchema: message,
+   }),
++  action({
++    name: "download_attachment",
++    description: "Download one Gmail message attachment into local connector transit storage.",
++    requiredScopes: gmailReadScopes,
++    properties: { messageId, attachmentId },
++    required: ["messageId", "attachmentId"],
++    outputSchema: s.object(
++      {
++        messageId,
++        attachmentId,
++        file: s.object(
++          {
++            fileId: s.string({ minLength: 1, description: "Local transit file identifier." }),
++            downloadUrl: s.string({ format: "uri", description: "Local transit download URL." }),
++            sizeBytes: s.integer({ minimum: 0, description: "Stored file size in bytes." }),
++            name: s.string({ minLength: 1, description: "Attachment file name." }),
++            mimeType: s.string({ minLength: 1, description: "Attachment MIME type." }),
++          },
++          { required: ["fileId", "downloadUrl", "sizeBytes", "name", "mimeType"] },
++        ),
++      },
++      {
++        required: ["messageId", "attachmentId", "file"],
++        description: "Downloaded Gmail attachment in local connector transit storage.",
++      },
++    ),
++  }),
+   action({
+     name: "fetch_message_by_thread_id",
+     description: "Fetch all messages in a Gmail thread.",
+diff --git a/src/providers/gmail/executors.ts b/src/providers/gmail/executors.ts
+index d8578cd..e34aa22 100644
+--- a/src/providers/gmail/executors.ts
++++ b/src/providers/gmail/executors.ts
+@@ -1,6 +1,6 @@
+-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
++import type { CredentialValidators, ExecutionContext, ProviderExecutors, TransitFileWriter } from "../../core/types.ts";
+ import type { ProviderActionHandlers } from "../provider-runtime.ts";
+-import type { GmailDraftResource, GmailMessageResource, GmailThreadResource } from "./message.ts";
++import type { GmailDraftResource, GmailMessagePart, GmailMessageResource, GmailThreadResource } from "./message.ts";
+
+ import {
+   defineProviderExecutors,
+@@ -30,6 +30,7 @@ interface ActionContext {
+   userId: string;
+   accessToken: string;
+   fetcher: typeof fetch;
++  transitFiles?: TransitFileWriter;
+ }
+
+ type ActionHandler = (input: Record<string, unknown>, context: ActionContext) => Promise<unknown>;
+@@ -66,6 +67,9 @@ export const gmailActionHandlers: ProviderActionHandlers<"gmail", ActionHandler>
+   fetch_message_by_message_id(input, { userId, accessToken, fetcher }) {
+     return fetchMessageByMessageId(input, userId, accessToken, fetcher);
+   },
++  download_attachment(input, context) {
++    return downloadAttachment(input, context);
++  },
+   fetch_message_by_thread_id(input, { userId, accessToken, fetcher }) {
+     return fetchMessagesByThreadId(input, userId, accessToken, fetcher);
+   },
+@@ -198,7 +202,12 @@ export const executors: ProviderExecutors = defineProviderExecutors<ActionContex
+   handlers: gmailActionHandlers,
+   async createContext(context: ExecutionContext, fetcher: typeof fetch): Promise<ActionContext> {
+     const credential = await requireOAuthCredential(context, "gmail");
+-    return { userId: "me", accessToken: credential.accessToken, fetcher };
++    return {
++      userId: "me",
++      accessToken: credential.accessToken,
++      fetcher,
++      ...(context.transitFiles ? { transitFiles: context.transitFiles } : {}),
++    };
+   },
+ });
+
+@@ -278,6 +287,74 @@ async function fetchMessageByMessageId(
+   return normalizeGmailMessage(message);
+ }
+
++async function downloadAttachment(input: Record<string, unknown>, context: ActionContext) {
++  if (!context.transitFiles) {
++    throw new ProviderRequestError(503, "Gmail attachment download requires local transit file storage");
++  }
++  const messageId = normalizeMessageId(input.messageId);
++  const attachmentId = normalizeMessageId(input.attachmentId);
++  const message = await getMessageResource(context.userId, messageId, context.accessToken, context.fetcher, "full");
++  const part = findAttachmentPart(message.payload, attachmentId);
++  if (!part) {
++    throw new ProviderRequestError(404, "Gmail attachment was not found on the selected message");
++  }
++  const reportedSize = part.body?.size;
++  if (reportedSize != null && (!Number.isSafeInteger(reportedSize) || reportedSize < 0)) {
++    throw new ProviderRequestError(502, "Gmail attachment metadata contained an invalid size");
++  }
++  if (reportedSize != null && reportedSize > context.transitFiles.maxBytes) {
++    throw new ProviderRequestError(413, `Gmail attachment exceeds local transit limit of ${context.transitFiles.maxBytes} bytes`);
++  }
++  const maxEncodedBytes = Math.ceil(context.transitFiles.maxBytes / 3) * 4;
++  const response = await sendGmailRequest(
++    gmailUserUrl(context.userId, "messages", messageId, "attachments", attachmentId),
++    context.accessToken,
++    context.fetcher,
++  );
++  const attachment = asObject(await readProviderJsonBody(response, {
++    emptyBody: {},
++    invalidJsonMessage: "Gmail attachment response must be valid JSON",
++    maxBytes: maxEncodedBytes + 16 * 1024,
++  }));
++  if (typeof attachment.data !== "string") {
++    throw new ProviderRequestError(502, "Gmail attachment response did not contain file data");
++  }
++  if (Buffer.byteLength(attachment.data, "utf8") > maxEncodedBytes) {
++    throw new ProviderRequestError(413, `Gmail attachment exceeds local transit limit of ${context.transitFiles.maxBytes} bytes`);
++  }
++  if (!/^[A-Za-z0-9_-]*={0,2}$/u.test(attachment.data)) {
++    throw new ProviderRequestError(502, "Gmail attachment response contained invalid base64url data");
++  }
++  const canonicalData = attachment.data.replace(/=+$/u, "");
++  const bytes = Buffer.from(attachment.data, "base64url");
++  if (bytes.toString("base64url") !== canonicalData) {
++    throw new ProviderRequestError(502, "Gmail attachment response contained invalid base64url data");
++  }
++  if (bytes.byteLength > context.transitFiles.maxBytes) {
++    throw new ProviderRequestError(413, `Gmail attachment exceeds local transit limit of ${context.transitFiles.maxBytes} bytes`);
++  }
++  if (reportedSize != null && reportedSize !== bytes.byteLength) {
++    throw new ProviderRequestError(502, "Gmail attachment metadata size did not match the downloaded bytes");
++  }
++  if (attachment.size != null && (!Number.isSafeInteger(attachment.size) || attachment.size !== bytes.byteLength)) {
++    throw new ProviderRequestError(502, "Gmail attachment size did not match the downloaded bytes");
++  }
++  const name = part.filename || `gmail-attachment-${attachmentId.slice(0, 12)}`;
++  const mimeType = part.mimeType || "application/octet-stream";
++  const file = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
++  return { messageId, attachmentId, file };
++}
++
++function findAttachmentPart(payload: GmailMessagePart | undefined, attachmentId: string): GmailMessagePart | undefined {
++  if (!payload) return undefined;
++  if (payload.body?.attachmentId === attachmentId) return payload;
++  for (const part of payload.parts ?? []) {
++    const found = findAttachmentPart(part, attachmentId);
++    if (found) return found;
++  }
++  return undefined;
++}
++
+ async function fetchMessagesByThreadId(
+   input: Record<string, unknown>,
+   userId: string,

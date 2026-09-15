@@ -115,7 +115,7 @@ export const createConnectorTools = (
     name: "execute_action",
     label: "Execute Action",
     description:
-      "Execute an allowed action through one of the current member's connections. Use get_action_guide first and match its schema. Start Gmail searches with gmail.fetch_emails, detail summary and maxResults 20; then fetch selected message IDs. Results include metadata, previews and local file references to complete readable bodies. Use read/grep for omitted text, not another identical fetch. Refresh Gmail for latest updates.",
+      "Execute an allowed action through one of the current member's connections. Use get_action_guide first and match its schema. Start Gmail searches with gmail.fetch_emails, detail summary and maxResults 20; then fetch selected message IDs. For requested Gmail attachment bytes, execute gmail.download_attachment with the selected messageId and attachmentId; Ronto imports the connector transit file and returns a local workspace path without placing file bytes in model context. Results include metadata, previews and local file references to complete readable bodies. Use read/grep for omitted text, not another identical fetch. Refresh Gmail for latest updates.",
     parameters: ExecuteParameters,
     execute: async (toolCallId, parameters) => {
       const suppliedInput = await Schema.decodeUnknownPromise(Schema.JsonObject)(
@@ -143,7 +143,10 @@ export const createConnectorTools = (
             runId,
             actionId: parameters.actionId,
             input,
-          }, result.output))
+          }, result.output, {
+            read: (fileId, maxBytes) => Effect.runPromise(connector.readTransitFile(fileId, maxBytes)),
+            delete: (fileId) => Effect.runPromise(connector.deleteTransitFile(fileId)),
+          }))
         : JSON.stringify({
               approvalRequired: true,
               approvalId: result.approval.id,
