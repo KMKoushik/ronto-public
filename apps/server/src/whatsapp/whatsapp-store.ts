@@ -1300,7 +1300,7 @@ export class WhatsappStore extends Context.Service<
               JOIN ronto_agent_run run ON run.conversation_id = conversation.id
               JOIN ronto_tool_call call ON call.run_id = run.id
               JOIN ronto_tool_approval approval ON approval.tool_call_id = call.id
-                AND approval.id = ${approvalId}
+                AND approval.tool_call_id = ${approvalId}
               WHERE identity.adapter = 'whatsapp'
                 AND identity.external_user_id IN ${sql.in(senderAliases)}
               ORDER BY identity.created_at, identity.id
