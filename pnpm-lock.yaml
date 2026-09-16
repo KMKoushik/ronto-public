@@ -47,8 +47,8 @@ importers:
         specifier: 4.0.0-rc.112
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)
       '@raindrop-ai/pi-agent':
-        specifier: 0.2.3
-        version: 0.2.3(@earendil-works/pi-agent-core@0.84.4(ws@8.21.3)(zod@4.5.4))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.3)(zod@4.5.4))
+        specifier: 0.2.4
+        version: 0.2.4(@earendil-works/pi-agent-core@0.84.4(ws@8.21.3)(zod@4.5.4))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.3)(zod@4.5.4))
       '@ronto/api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -1254,8 +1254,8 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@raindrop-ai/pi-agent@0.2.3':
-    resolution: {integrity: sha512-cD1VTjIIE0js0qzMibeM2pE9JmHilcxofBB0nsGtnp1Uoc75IqaGvjw65KGsNaCyojy5TrpL/BXGXtsdVDCrTw==}
+  '@raindrop-ai/pi-agent@0.2.4':
+    resolution: {integrity: sha512-R/IqDF6nVE/F8gqi5ZcANSWln4Pv9yQweCpp+n4SW9dD3emLscr+VpML022voxvZ5u5QysahD++0W/2uyAwFVw==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       '@earendil-works/pi-agent-core': '>=0.84.4'
@@ -4323,7 +4323,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@raindrop-ai/pi-agent@0.2.3(@earendil-works/pi-agent-core@0.84.4(ws@8.21.3)(zod@4.5.4))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.3)(zod@4.5.4))':
+  '@raindrop-ai/pi-agent@0.2.4(@earendil-works/pi-agent-core@0.84.4(ws@8.21.3)(zod@4.5.4))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.3)(zod@4.5.4))':
     dependencies:
       '@earendil-works/pi-agent-core': 0.84.4(ws@8.21.3)(zod@4.5.4)
     optionalDependencies:

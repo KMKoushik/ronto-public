@@ -24,7 +24,7 @@
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@effect/platform-node": "4.0.0-rc.112",
     "@effect/sql-sqlite-node": "4.0.0-rc.112",
-    "@raindrop-ai/pi-agent": "0.2.3",
+    "@raindrop-ai/pi-agent": "0.2.4",
     "@ronto/api": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "agent-browser": "0.35.1",
