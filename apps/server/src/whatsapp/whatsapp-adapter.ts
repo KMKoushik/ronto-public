@@ -704,6 +704,14 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
         };
         activeTurns.set(inbox.conversationId, active);
         const fiber = yield* processInbox(inbox).pipe(
+          Effect.onInterrupt(() =>
+            active.interruptRequested
+              ? store.markFailed(
+                  inbox.id,
+                  "WhatsApp turn superseded by a newer message",
+                ).pipe(Effect.orDie)
+              : Effect.void
+          ),
           Effect.catchCause((cause) =>
             Effect.logError("WhatsApp agent turn failed", failureMessage(cause)).pipe(
               Effect.andThen(
