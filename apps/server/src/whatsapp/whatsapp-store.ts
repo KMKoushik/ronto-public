@@ -1519,16 +1519,22 @@ export class WhatsappStore extends Context.Service<
                 SET status = 'processing', updated_at = ${iso(at)}
                 WHERE id = (
                   SELECT id
-                  FROM ronto_whatsapp_inbox
-                  WHERE status = 'queued'
+                  FROM ronto_whatsapp_inbox candidate
+                  WHERE candidate.status = 'queued'
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM ronto_whatsapp_inbox active
+                      WHERE active.conversation_id = candidate.conversation_id
+                        AND active.status = 'processing'
+                    )
                     AND NOT EXISTS (
                       SELECT 1
                       FROM ronto_whatsapp_media_receipt receipt
-                      WHERE receipt.conversation_id = ronto_whatsapp_inbox.conversation_id
+                      WHERE receipt.conversation_id = candidate.conversation_id
                         AND receipt.status = 'receiving'
-                        AND receipt.created_at <= ronto_whatsapp_inbox.created_at
+                        AND receipt.created_at <= candidate.created_at
                     )
-                  ORDER BY created_at, id
+                  ORDER BY candidate.created_at, candidate.id
                   LIMIT 1
                 )
                 RETURNING ${sql.unsafe(selectInbox)}

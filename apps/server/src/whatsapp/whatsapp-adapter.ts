@@ -5,10 +5,11 @@ import {
   FileId,
   type MessageInputContent,
 } from "@ronto/api";
-import { Cause, DateTime, Effect, Layer } from "effect";
+import { Cause, DateTime, Effect, Fiber, Layer } from "effect";
 import { createHash, randomUUID } from "node:crypto";
 
 import { ChannelWorkspace } from "../agent/channel-workspace.ts";
+import { AgentInvocationError } from "../agent/agent-service.ts";
 import { ConversationTurn } from "../http/conversation-turn.ts";
 import {
   WhatsappClient,
@@ -29,6 +30,8 @@ import {
 } from "./whatsapp-store.ts";
 
 const commandPrefix = process.env.WHATSAPP_COMMAND_PREFIX ?? "/ronto";
+const inboxWorkerCount = 4;
+const turnTimeout = "10 minutes";
 const claimToken = /^[A-Za-z0-9_-]{20,128}$/;
 const externalMessageId = (inbox: WhatsappInbox): string =>
   `whatsapp:${inbox.externalChannelId}:${inbox.externalMessageId}`;
@@ -36,6 +39,10 @@ type StartConversationResult =
   | { readonly kind: "success"; readonly created: boolean }
   | { readonly kind: "unauthorized" }
   | { readonly kind: "failed" };
+interface ActiveWhatsappTurn {
+  fiber: Fiber.Fiber<unknown, unknown> | undefined;
+  interruptRequested: boolean;
+}
 
 const failureMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message.slice(0, 1_000) : String(cause).slice(0, 1_000);
@@ -102,6 +109,15 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
     yield* store.failInterrupted().pipe(Effect.orDie);
     yield* store.resetSendingOutbox().pipe(Effect.orDie);
     if ((yield* client.status) === "disabled") return;
+
+    const activeTurns = new Map<string, ActiveWhatsappTurn>();
+    const interruptSupersededTurn = (inbox: WhatsappInbox) =>
+      Effect.sync(() => {
+        const active = activeTurns.get(inbox.conversationId);
+        if (active === undefined) return;
+        active.interruptRequested = true;
+        active.fiber?.interruptUnsafe();
+      });
 
     const consumeDmFamilyCommand = Effect.fn("WhatsappAdapter.consumeDmFamilyCommand")(function* (
       message: NormalizedWhatsappMessage,
@@ -390,10 +406,11 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
             managed.storagePath,
             downloaded.bytes,
           );
-          yield* store.queueInboundMedia(
+          const inbox = yield* store.queueInboundMedia(
             reserved.receipt.id,
             media.kind === "image" ? "[Image]" : `[File: ${name}]`,
           );
+          yield* interruptSupersededTurn(inbox);
         }).pipe(
           Effect.catch((cause) =>
             Effect.gen(function* () {
@@ -433,6 +450,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
       yield* store
         .enqueue(input)
         .pipe(
+          Effect.tap(interruptSupersededTurn),
           Effect.catch((cause) =>
             isNoSuchElement(cause)
               ? Effect.void
@@ -492,12 +510,22 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
           onRunPersisted: (run) =>
             store.markRun(inbox.id, run.id).pipe(Effect.orDie),
         },
-      ).pipe(Effect.catchTag("AgentInvocationError", (error) =>
-        store.markFailed(inbox.id, error.message, error.toolsStarted ?? false).pipe(
-          Effect.orDie,
-          Effect.andThen(Effect.fail(error)),
+      ).pipe(
+        Effect.timeout(turnTimeout),
+        Effect.catchTag("TimeoutError", (cause) =>
+          Effect.fail(
+            new AgentInvocationError({
+              message: `WhatsApp agent turn exceeded ${turnTimeout}`,
+              cause,
+            }),
+          )),
+        Effect.catchTag("AgentInvocationError", (error) =>
+          store.markFailed(inbox.id, error.message, error.toolsStarted ?? false).pipe(
+            Effect.orDie,
+            Effect.andThen(Effect.fail(error)),
+          ),
         ),
-      ));
+      );
       if (outcome.disposition === "silent") {
         if (inbox.responseMode === "required") {
           return yield* Effect.die("A required WhatsApp turn completed silently");
@@ -663,25 +691,49 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
       return true;
     });
 
-    const worker = Effect.gen(function* () {
+    const inboxWorker = Effect.gen(function* () {
       while (true) {
         const inbox = yield* store.claimNext().pipe(Effect.orDie);
-        if (inbox !== null) {
-          yield* processInbox(inbox).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logError("WhatsApp agent turn failed", failureMessage(cause)).pipe(
-                Effect.andThen(
-                  store.markFailed(inbox.id, failureMessage(cause)).pipe(Effect.orDie),
-                ),
-              ),
-            ),
-          );
+        if (inbox === null) {
+          yield* Effect.sleep(500);
           continue;
         }
+        const active: ActiveWhatsappTurn = {
+          fiber: undefined,
+          interruptRequested: false,
+        };
+        activeTurns.set(inbox.conversationId, active);
+        const fiber = yield* processInbox(inbox).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("WhatsApp agent turn failed", failureMessage(cause)).pipe(
+              Effect.andThen(
+                store.markFailed(inbox.id, failureMessage(cause)).pipe(Effect.orDie),
+              ),
+            ),
+          ),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (activeTurns.get(inbox.conversationId) === active) {
+                activeTurns.delete(inbox.conversationId);
+              }
+            }),
+          ),
+          Effect.forkScoped,
+        );
+        active.fiber = fiber;
+        if (active.interruptRequested) fiber.interruptUnsafe();
+        yield* Fiber.await(fiber);
+      }
+    });
+    const outboxWorker = Effect.gen(function* () {
+      while (true) {
         if (yield* deliverOne()) continue;
         yield* Effect.sleep(500);
       }
     });
-    yield* Effect.forkScoped(worker);
+    for (let index = 0; index < inboxWorkerCount; index += 1) {
+      yield* Effect.forkScoped(inboxWorker);
+    }
+    yield* Effect.forkScoped(outboxWorker);
   }),
 );
