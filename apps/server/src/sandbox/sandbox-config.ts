@@ -4,7 +4,9 @@ import { databasePath } from "../db/database.ts";
 
 export const SandboxIdentifier = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9-]+$/));
 export const SandboxImage = Schema.String.check(Schema.isPattern(/^sha256:[a-f0-9]{64}$/));
+export const DarwinSandboxImage = Schema.String.check(Schema.isPattern(/^ronto-sandbox:[a-zA-Z0-9._-]+$/));
 export const familyStoragePath = () => resolve(process.env.FAMILY_STORAGE_PATH ?? join(dirname(databasePath), "families"));
+export const familyImagePath = () => resolve(process.env.RONTO_FAMILY_IMAGE_PATH ?? "/private/var/lib/ronto-family-images");
 export const sandboxLimits = {
   cpus: 2,
   memoryBytes: 8 * 1024 ** 3,

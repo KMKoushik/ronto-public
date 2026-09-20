@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import { familyStoragePath, SandboxImage, sandboxLimits } from "./sandbox-config.ts";
 import { SandboxStore, type SandboxSlot } from "./sandbox-store.ts";
 import { ChannelWorkspace } from "../agent/channel-workspace.ts";
+import { darwinSandboxRuntime } from "./darwin-family-sandbox.ts";
 
 const execFileAsync = promisify(execFile);
 const Digest = Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/));
@@ -106,6 +107,7 @@ export class FamilySandbox extends Context.Service<FamilySandbox, {
       await Promise.allSettled(pending);
     }));
     const families = new Map<FamilyId, FamilyState>();
+    const darwinCommands = Semaphore.makeUnsafe(1);
     const image = process.env.RONTO_SANDBOX_IMAGE;
     const uid = process.getuid?.();
     const gid = process.getgid?.();
@@ -118,6 +120,7 @@ export class FamilySandbox extends Context.Service<FamilySandbox, {
     const controlRoot = join(runtime, "ronto-commands");
     const temporaryRoot = resolve(tmpdir());
     const root = familyStoragePath();
+    const darwin = darwinSandboxRuntime(root);
     const invoke = async (program: string, args: ReadonlyArray<string>) =>
       (await execFileAsync(program, [...args], { cwd: home, env: environment, timeout: 30_000, maxBuffer: 1024 * 1024 })).stdout;
     const podman = (...args: string[]) => invoke("/usr/bin/podman", args);
@@ -200,6 +203,9 @@ export class FamilySandbox extends Context.Service<FamilySandbox, {
         }
       });
     }
+    if (process.platform === "darwin" && (image !== undefined || process.env.RONTO_SANDBOX_IMAGE_DIGEST !== undefined)) {
+      yield* Effect.promise(() => darwin.prepare());
+    }
     const validateDirectory = async (slot: SandboxSlot, channelId: ChannelId) => {
       const directory = join(root, slot.id);
       const stat = await lstat(directory);
@@ -279,6 +285,15 @@ export class FamilySandbox extends Context.Service<FamilySandbox, {
         if (resolve(cwd) !== join(root, familyId, "channels", channelId)) throw new Error("Unexpected Bash working directory");
         const slot = await Effect.runPromise(store.resolve(familyId, channelId));
         if (signal.aborted) throw new Error("aborted");
+        if (process.platform === "darwin") {
+          const execution = Effect.runPromise(darwinCommands.withPermit(
+            workspace.withSandboxAccess(familyId, () => darwin.exec(slot, channelId, command, {
+              signal, timeout, onData: options.onData,
+            })),
+          ));
+          pending.add(execution);
+          try { return await execution; } finally { pending.delete(execution); }
+        }
         let state = families.get(familyId);
         if (!state) {
           state = { lock: Semaphore.makeUnsafe(1), initialized: false, active: 0, failed: false };

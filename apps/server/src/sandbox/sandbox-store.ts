@@ -12,6 +12,8 @@ export const SandboxSlot = Schema.Struct({
   projectId: Schema.Int,
   directoryDevice: Schema.Int,
   directoryInode: Schema.Int,
+  storageKind: Schema.NullOr(Schema.String),
+  storageIdentity: Schema.NullOr(Schema.String),
 });
 export type SandboxSlot = typeof SandboxSlot.Type;
 
@@ -24,7 +26,8 @@ export class SandboxStore extends Context.Service<SandboxStore, {
       Request: Schema.Struct({ familyId: FamilyId, channelId: ChannelId }),
       Result: SandboxSlot,
       execute: ({ familyId, channelId }) => sql`
-        SELECT slot.id, slot.project_id, slot.directory_device, slot.directory_inode
+        SELECT slot.id, slot.project_id, slot.directory_device, slot.directory_inode,
+          slot.storage_kind, slot.storage_identity
         FROM ronto_family_sandbox_slot slot
         JOIN ronto_channel channel ON channel.family_id = slot.assigned_family_id
         WHERE slot.assigned_family_id = ${familyId} AND channel.id = ${channelId}

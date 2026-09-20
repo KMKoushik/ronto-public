@@ -1,4 +1,4 @@
-FROM docker.io/library/ubuntu@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316
+FROM docker.io/library/ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -7,6 +7,11 @@ RUN apt-get update \
       python3-openpyxl python3-pil python3-pypdf python3-reportlab python3-venv \
       qpdf ripgrep sed tar tini unzip util-linux zip \
     && rm -rf /var/lib/apt/lists/*
+
+# Apple container uses a VM boundary rather than a shared host kernel and does
+# not expose a no-new-privileges switch. Remove every set-id bit so the forced
+# non-root runtime user cannot elevate inside that VM.
+RUN find / -xdev -type f -perm /6000 -exec chmod a-s {} +
 
 # The runtime sets a non-root UID, read-only root filesystem, resource ceilings,
 # allowlisted environment, and exactly one family bind mount. User-installed
