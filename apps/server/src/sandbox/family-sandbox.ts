@@ -7,7 +7,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:f
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { familyStoragePath, SandboxImage, sandboxLimits } from "./sandbox-config.ts";
+import { darwinSandboxCommandConcurrency, familyStoragePath, SandboxImage, sandboxLimits } from "./sandbox-config.ts";
 import { SandboxStore, type SandboxSlot } from "./sandbox-store.ts";
 import { ChannelWorkspace } from "../agent/channel-workspace.ts";
 import { darwinSandboxRuntime } from "./darwin-family-sandbox.ts";
@@ -107,7 +107,7 @@ export class FamilySandbox extends Context.Service<FamilySandbox, {
       await Promise.allSettled(pending);
     }));
     const families = new Map<FamilyId, FamilyState>();
-    const darwinCommands = Semaphore.makeUnsafe(1);
+    const darwinCommands = Semaphore.makeUnsafe(darwinSandboxCommandConcurrency);
     const image = process.env.RONTO_SANDBOX_IMAGE;
     const uid = process.getuid?.();
     const gid = process.getgid?.();
