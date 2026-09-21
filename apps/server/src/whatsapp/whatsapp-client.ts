@@ -76,13 +76,27 @@ export interface DownloadedWhatsappMedia {
   readonly checksum: string;
 }
 
-const silentLogger = {
+interface BaileysWarningAttributes {
+  readonly trace?: string;
+}
+
+const mediaUploadFailure = (
+  attributes: BaileysWarningAttributes,
+): string | undefined => attributes.trace?.split("\n", 1)[0];
+
+const whatsappLogger = {
   level: "silent",
-  child: () => silentLogger,
+  child: () => whatsappLogger,
   trace: () => {},
   debug: () => {},
   info: () => {},
-  warn: () => {},
+  warn: (attributes: BaileysWarningAttributes = {}, message?: string) => {
+    if (message?.startsWith("Error in uploading to ") !== true) return;
+    Effect.runSync(Effect.logWarning("WhatsApp media upload failed", {
+      host: message,
+      cause: mediaUploadFailure(attributes) ?? "Unknown upload failure",
+    }));
+  },
   error: () => {},
 };
 
@@ -309,9 +323,9 @@ export class WhatsappClient extends Context.Service<
           version,
           auth: {
             creds: auth.state.creds,
-            keys: makeCacheableSignalKeyStore(auth.state.keys, silentLogger),
+            keys: makeCacheableSignalKeyStore(auth.state.keys, whatsappLogger),
           },
-          logger: silentLogger,
+          logger: whatsappLogger,
           browser: Browsers.macOS("Chrome"),
           markOnlineOnConnect: true,
           syncFullHistory: false,
@@ -443,7 +457,9 @@ export class WhatsappClient extends Context.Service<
             cause instanceof WhatsappClientError
               ? cause
               : new WhatsappClientError({
-                  message: "Could not send the WhatsApp message",
+                  message: cause instanceof Error
+                    ? `Could not send the WhatsApp message: ${cause.message}`
+                    : "Could not send the WhatsApp message",
                   retryable: true,
                 }),
         });
@@ -663,7 +679,7 @@ export class WhatsappClient extends Context.Service<
                 { options: { signal: AbortSignal.timeout(30_000) } },
                 {
                   reuploadRequest: socket.updateMediaMessage,
-                  logger: silentLogger,
+                  logger: whatsappLogger,
                 },
               );
               const chunks: Array<Buffer> = [];
