@@ -234,5 +234,7 @@ export const createConnectorTools = (
     },
   };
 
-  return [listConnections, searchActions, getActionGuide, executeAction];
+  return [listConnections, searchActions, getActionGuide, executeAction].filter(
+    (tool) => tool.name !== "execute_action",
+  );
 };
