@@ -13,21 +13,40 @@ export const FamilyMemoryMaintenanceWorkerLive = Layer.effectDiscard(
       const job = yield* store.claimFamilyMemoryMaintenance(yield* DateTime.now);
       if (job === null) return false;
       const completed = yield* Effect.gen(function* () {
+        let modelProvider: string | null = null;
+        let modelId: string | null = null;
         const memory = yield* workspace.readFamilyMemory(job.familyId);
-        if (memory.content.trim().length === 0) {
-          const next = DateTime.add(yield* DateTime.now, { days: 1 });
-          yield* store.completeFamilyMemoryMaintenance(job, null, null, next);
-          return;
+        if (memory.content.trim().length > 0) {
+          const generated = yield* agent.generateFamilyMemoryCleanup(
+            job.familyId,
+            memory.content,
+            `family:${job.familyId}`,
+          );
+          if (generated.content !== memory.content) {
+            yield* workspace.writeFamilyMemory(job.familyId, generated.content, memory.revision);
+          }
+          modelProvider = generated.modelProvider;
+          modelId = generated.modelId;
         }
-        const generated = yield* agent.generateFamilyMemoryCleanup(job.familyId, memory.content);
-        if (generated.content !== memory.content) {
-          yield* workspace.writeFamilyMemory(job.familyId, generated.content, memory.revision);
+        for (const channelId of yield* store.listFamilyChannelIds(job.familyId)) {
+          const channelMemory = yield* workspace.readMemory(channelId);
+          if (channelMemory.content.trim().length === 0) continue;
+          const cleaned = yield* agent.generateFamilyMemoryCleanup(
+            job.familyId,
+            channelMemory.content,
+            `channel:${channelId}`,
+          );
+          if (cleaned.content !== channelMemory.content) {
+            yield* workspace.writeMemory(channelId, cleaned.content, channelMemory.revision);
+          }
+          modelProvider = cleaned.modelProvider;
+          modelId = cleaned.modelId;
         }
         const next = DateTime.add(yield* DateTime.now, { days: 1 });
         yield* store.completeFamilyMemoryMaintenance(
           job,
-          generated.modelProvider,
-          generated.modelId,
+          modelProvider,
+          modelId,
           next,
         );
       }).pipe(Effect.result);

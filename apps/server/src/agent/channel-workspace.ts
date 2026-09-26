@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { databasePath } from "../db/database.ts";
 import { SqlClient, SqlSchema } from "effect/unstable/sql";
 
-const maxMemoryCharacters = 8_000;
+export const maxMemoryCharacters = 32_000;
 const maxWorkspaceCharacters = 150_000;
 const maxManagedFileBytes = 25 * 1024 * 1024;
 const maxListedFiles = 500;
@@ -331,12 +331,15 @@ export class ChannelWorkspace extends Context.Service<
                   path,
                   "utf8",
                 );
-                const limit =
-                  name === "MEMORY.md"
-                    ? maxMemoryCharacters
-                    : maxWorkspaceCharacters;
-                if (content.length > limit)
-                  throw invalid(`File is limited to ${limit} characters`);
+                // Writes enforce the memory budget. Reads must not, or an
+                // over-budget file bricks every later turn before it can be trimmed.
+                if (
+                  name !== "MEMORY.md" &&
+                  content.length > maxWorkspaceCharacters
+                )
+                  throw invalid(
+                    `File is limited to ${maxWorkspaceCharacters} characters`,
+                  );
                 return { path: name, content, revision: revisionOf(content) };
               } catch (cause) {
                 const fs = Schema.decodeUnknownOption(FileSystemError)(cause);
@@ -494,10 +497,6 @@ export class ChannelWorkspace extends Context.Service<
                 const path = await checkedFamilyMemoryPath(id);
                 try {
                   const content = await readFile(path, "utf8");
-                  if (content.length > maxMemoryCharacters)
-                    throw invalid(
-                      `File is limited to ${maxMemoryCharacters} characters`,
-                    );
                   return {
                     path: "FAMILY_MEMORY.md",
                     content,

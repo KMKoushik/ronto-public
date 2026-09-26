@@ -229,6 +229,9 @@ export class RontoStore extends Context.Service<
       nextAttemptAt: DateTime.Utc,
     ): Effect.Effect<void, StoreError>;
     enqueueSessionSummaryBackfill(limit: number): Effect.Effect<number, StoreError>;
+    listFamilyChannelIds(
+      familyId: FamilyId,
+    ): Effect.Effect<ReadonlyArray<ChannelId>, StoreError>;
     claimFamilyMemoryMaintenance(
       at: DateTime.Utc,
     ): Effect.Effect<typeof FamilyMemoryMaintenanceJob.Type | null, StoreError>;
@@ -1174,6 +1177,21 @@ export class RontoStore extends Context.Service<
         },
       );
 
+      const findFamilyChannelIds = SqlSchema.findAll({
+        Request: FamilyId,
+        Result: Schema.Struct({ id: ChannelId }),
+        execute: (familyId) => sql`
+          SELECT id FROM ronto_channel
+          WHERE family_id = ${familyId}
+          ORDER BY is_default DESC, name COLLATE NOCASE
+        `,
+      });
+      const listFamilyChannelIds = Effect.fn("RontoStore.listFamilyChannelIds")(
+        function* (familyId: FamilyId) {
+          return (yield* findFamilyChannelIds(familyId)).map((row) => row.id);
+        },
+      );
+
       const claimFamilyMemoryMaintenance = Effect.fn("RontoStore.claimFamilyMemoryMaintenance")(
         function* (at: DateTime.Utc) {
           return yield* sql.withTransaction(Effect.gen(function* () {
@@ -1885,6 +1903,7 @@ export class RontoStore extends Context.Service<
         completeSessionSummary,
         retrySessionSummary,
         enqueueSessionSummaryBackfill,
+        listFamilyChannelIds,
         claimFamilyMemoryMaintenance,
         completeFamilyMemoryMaintenance,
         retryFamilyMemoryMaintenance,
