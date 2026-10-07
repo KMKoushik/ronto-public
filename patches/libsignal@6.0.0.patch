@@ -1,0 +1,25 @@
+diff --git a/src/session_record.js b/src/session_record.js
+--- a/src/session_record.js
++++ b/src/session_record.js
+@@ -267,10 +267,10 @@
+ 
+     closeSession(session) {
+         if (this.isClosed(session)) {
+-            console.warn("Session already closed", session);
++            console.warn("Session already closed");
+             return;
+         }
+-        console.info("Closing session:", session);
++        console.info("Closing session");
+         session.indexInfo.closed = Date.now();
+     }
+ 
+@@ -278,7 +278,7 @@
+         if (!this.isClosed(session)) {
+             console.warn("Session already open");
+         }
+-        console.info("Opening session:", session);
++        console.info("Opening session");
+         session.indexInfo.closed = -1;
+     }
+ 

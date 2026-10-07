@@ -8,6 +8,9 @@ patchedDependencies:
   '@whiskeysockets/baileys@7.0.0-rc14':
     hash: 23fc3351b8c056e15be82b3a0dc5e8fb917a5050075cc8f148b94e4be7764b17
     path: patches/@whiskeysockets__baileys@7.0.0-rc14.patch
+  libsignal@6.0.0:
+    hash: 7ba3ab8ddd8804e8e7300b9449e27232220197cf3d77559743f40d68db43b14a
+    path: patches/libsignal@6.0.0.patch
 
 importers:
 
@@ -4748,7 +4751,7 @@ snapshots:
       '@cacheable/node-cache': 1.7.6
       '@hapi/boom': 9.1.4
       async-mutex: 0.5.0
-      libsignal: 6.0.0
+      libsignal: 6.0.0(patch_hash=7ba3ab8ddd8804e8e7300b9449e27232220197cf3d77559743f40d68db43b14a)
       lru-cache: 11.5.2
       music-metadata: 11.15.0
       p-queue: 9.3.3
@@ -5385,7 +5388,7 @@ snapshots:
 
   kysely@0.29.5: {}
 
-  libsignal@6.0.0:
+  libsignal@6.0.0(patch_hash=7ba3ab8ddd8804e8e7300b9449e27232220197cf3d77559743f40d68db43b14a):
     dependencies:
       curve25519-js: 0.0.4
       protobufjs: 7.6.6
