@@ -78,14 +78,57 @@ export interface DownloadedWhatsappMedia {
 
 interface BaileysWarningAttributes {
   readonly trace?: string;
+  readonly err?: unknown;
+  readonly error?: unknown;
 }
 
 const mediaUploadFailure = (
   attributes: BaileysWarningAttributes,
 ): string | undefined => attributes.trace?.split("\n", 1)[0];
 
+const TransportError = Schema.Struct({ message: Schema.String });
+const transportFailureReasons = [
+  "No SenderKeyRecord found for decryption",
+  "No session found to decrypt message",
+  "No session state available",
+  "No sender message key found for iteration",
+  "No sessions available",
+  "No matching sessions found for message",
+  "No session record",
+  "Key used already or never filled",
+  "Over 2000 messages into the future!",
+  "Chain closed",
+  "Bad MAC",
+  "Bad MAC length",
+  "Invalid PreKey ID",
+  "Missing SignedPreKey",
+  "Invalid signature!",
+  "InvalidMessageException",
+  "No participant in group message",
+] as const;
+
+// Never serialize Baileys attributes: they can contain plaintext, keys, or nodes.
+const transportFailureReason = (cause: unknown): string => {
+  if (!Schema.is(TransportError)(cause)) return "Unclassified transport failure";
+  for (const reason of transportFailureReasons) {
+    if (cause.message === reason) return reason;
+  }
+  if (cause.message.startsWith("Received message with old counter:")) {
+    return "Received message with old counter";
+  }
+  return "Unclassified transport failure";
+};
+
+const transportErrorEvents = new Set([
+  "failed to decrypt message",
+  "failed to process sender key distribution message",
+  "error in handling message",
+  "Failed to send retry",
+  "failed to ack message after error",
+]);
+
 const whatsappLogger = {
-  level: "silent",
+  level: "warn",
   child: () => whatsappLogger,
   trace: () => {},
   debug: () => {},
@@ -97,7 +140,14 @@ const whatsappLogger = {
       cause: mediaUploadFailure(attributes) ?? "Unknown upload failure",
     }));
   },
-  error: () => {},
+  error: (attributes: BaileysWarningAttributes = {}, message?: string) => {
+    Effect.runSync(Effect.logWarning("WhatsApp transport error", {
+      event: message !== undefined && transportErrorEvents.has(message)
+        ? message
+        : "Other transport error",
+      reason: transportFailureReason(attributes.err ?? attributes.error),
+    }));
+  },
 };
 
 const DisconnectError = Schema.Struct({
@@ -301,7 +351,25 @@ export class WhatsappClient extends Context.Service<
           ownAliases: ownAliases(auth.state.creds),
           commandPrefix,
         });
-        if (normalized === null) return;
+        const channelRef = message.key.remoteJid === null || message.key.remoteJid === undefined
+          ? null
+          : createHash("sha256").update(message.key.remoteJid).digest("hex").slice(0, 12);
+        if (normalized === null) {
+          if (message.key.fromMe !== true) {
+            Effect.runSync(Effect.logInfo("WhatsApp inbound message rejected by normalization", {
+              channelRef,
+              stubType: message.messageStubType ?? null,
+              hasContent: message.message !== null && message.message !== undefined,
+              hasSender: message.key.participant !== null && message.key.participant !== undefined,
+            }));
+          }
+          return;
+        }
+        Effect.runSync(Effect.logInfo("WhatsApp inbound message normalized", {
+          channelRef,
+          triggerKind: normalized.triggerKind,
+          group: normalized.group,
+        }));
         for (const listener of listeners) await listener(normalized);
       };
 
@@ -349,6 +417,13 @@ export class WhatsappClient extends Context.Service<
             }
           }
           const upsert = events["messages.upsert"];
+          if (upsert !== undefined) {
+            Effect.runSync(Effect.logInfo("WhatsApp message batch received", {
+              type: upsert.type,
+              count: upsert.messages.length,
+              ownCount: upsert.messages.filter((message) => message.key.fromMe === true).length,
+            }));
+          }
           if (upsert?.type === "notify") {
             for (const message of upsert.messages) {
               await publish(message);

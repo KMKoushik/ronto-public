@@ -453,7 +453,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
           Effect.tap(interruptSupersededTurn),
           Effect.catch((cause) =>
             isNoSuchElement(cause)
-              ? Effect.void
+              ? Effect.logWarning("WhatsApp inbound message has no authorized chat binding")
               : Effect.logWarning("WhatsApp inbound persistence failed"),
           ),
         );
