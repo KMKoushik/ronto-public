@@ -23,7 +23,7 @@ const readParameters = Type.Object({
 const timezoneParameters = Type.Object({
   timezone: Type.String({ minLength: 1, maxLength: 64, description: "IANA timezone name such as Australia/Sydney or America/New_York, or UTC. Abbreviations like EST and fixed offsets are rejected." }),
 });
-const ianaTimezone = /^(?:UTC|(?!Etc\/)[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+)$/;
+export const ianaTimezone = /^(?:UTC|(?!Etc\/)[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+)$/;
 const nonnegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const pageLimit = Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })));
 const SearchInput = Schema.Struct({

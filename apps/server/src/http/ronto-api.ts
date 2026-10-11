@@ -65,6 +65,7 @@ import { AuthorizationLive } from "./authorization.ts";
 import { ConversationTurn } from "./conversation-turn.ts";
 import { cancelActiveTurn, hasActiveTurn } from "./active-turns.ts";
 import { WhatsappAdapterLive } from "../whatsapp/whatsapp-adapter.ts";
+import { WhatsappSchedulerLive } from "../whatsapp/whatsapp-scheduler.ts";
 import { SessionSummaryWorkerLive } from "../agent/session-summary-worker.ts";
 import { FamilyMemoryMaintenanceWorkerLive } from "../agent/family-memory-maintenance-worker.ts";
 import { WhatsappAuth } from "../whatsapp/whatsapp-auth-state.ts";
@@ -1012,6 +1013,7 @@ export const AgentServiceLive = AgentService.layer.pipe(
     FamilySandboxLive,
     BrowserServiceLive,
     RontoStore.layer,
+    WhatsappStore.layer,
     ConnectorServiceLive,
     ConnectorApprovalsLive,
   ]),
@@ -1036,12 +1038,13 @@ export const WhatsappAuthLive = WhatsappAuth.layer.pipe(
 export const WhatsappClientLive = WhatsappClient.layer.pipe(
   Layer.provideMerge(WhatsappAuthLive),
 );
-export const WhatsappRuntimeLive = WhatsappAdapterLive.pipe(
+export const WhatsappRuntimeLive = Layer.merge(WhatsappAdapterLive, WhatsappSchedulerLive).pipe(
   Layer.provideMerge(WhatsappClientLive),
   Layer.provide([
     ConversationTurnLive,
     ChannelWorkspaceLive,
     ConnectorApprovalsLive,
+    RontoStore.layer,
   ]),
 );
 

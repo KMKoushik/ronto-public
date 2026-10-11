@@ -49,6 +49,61 @@ export class FamilyCapacityUnavailable extends Schema.TaggedError<FamilyCapacity
   "FamilyCapacityUnavailable", { message: Schema.String },
 ) {}
 
+export class ScheduleLimitReached extends Schema.TaggedError<ScheduleLimitReached>()(
+  "ScheduleLimitReached", { message: Schema.String },
+) {}
+
+export const maxActiveSchedulesPerChannel = 25;
+
+export const StoredSchedule = Schema.Struct({
+  id: Schema.String,
+  channelId: ChannelId,
+  createdByMemberId: FamilyMemberId,
+  creatorName: Schema.String,
+  title: Schema.String,
+  instruction: Schema.String,
+  cron: Schema.NullOr(Schema.String),
+  timezone: Schema.String,
+  responseMode: Schema.Literals(["required", "optional"]),
+  status: Schema.Literals(["active", "completed", "cancelled"]),
+  nextRunAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  lastRunAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  lastError: Schema.NullOr(Schema.String),
+  createdAt: Schema.DateTimeUtcFromString,
+});
+export type StoredSchedule = typeof StoredSchedule.Type;
+
+export interface NewSchedule {
+  readonly id: string;
+  readonly title: string;
+  readonly instruction: string;
+  readonly cron: string | null;
+  readonly timezone: string;
+  readonly responseMode: "required" | "optional";
+  readonly nextRunAt: DateTime.Utc;
+}
+
+export interface ScheduleAdvance {
+  readonly scheduleId: string;
+  readonly expectedRunAt: DateTime.Utc;
+  readonly nextRunAt: DateTime.Utc | null;
+  readonly status: "active" | "completed" | "cancelled";
+  readonly fired: boolean;
+  readonly error: string | null;
+  readonly at: DateTime.Utc;
+}
+
+const selectSchedule = `
+  schedule.id, schedule.channel_id, schedule.created_by_member_id,
+  COALESCE(creator_user.name, 'Family member') AS creator_name,
+  schedule.title, schedule.instruction, schedule.cron, schedule.timezone,
+  schedule.response_mode, schedule.status, schedule.next_run_at,
+  schedule.last_run_at, schedule.last_error, schedule.created_at
+  FROM ronto_schedule schedule
+  JOIN ronto_family_member creator ON creator.id = schedule.created_by_member_id
+  LEFT JOIN user creator_user ON creator_user.id = creator.user_id
+`;
+
 const NextSequence = Schema.Struct({
   nextSequence: Schema.Int.check(Schema.isGreaterThan(0)),
 });
@@ -232,6 +287,24 @@ export class RontoStore extends Context.Service<
     listFamilyChannelIds(
       familyId: FamilyId,
     ): Effect.Effect<ReadonlyArray<ChannelId>, StoreError>;
+    createSchedule(
+      channelId: ChannelId,
+      memberId: FamilyMemberId,
+      schedule: NewSchedule,
+      at: DateTime.Utc,
+    ): Effect.Effect<StoredSchedule, StoreError | ScheduleLimitReached>;
+    listSchedules(
+      channelId: ChannelId,
+      memberId: FamilyMemberId,
+    ): Effect.Effect<ReadonlyArray<StoredSchedule>, StoreError>;
+    cancelSchedule(
+      channelId: ChannelId,
+      memberId: FamilyMemberId,
+      scheduleId: string,
+      at: DateTime.Utc,
+    ): Effect.Effect<StoredSchedule | null, StoreError>;
+    findDueSchedule(at: DateTime.Utc): Effect.Effect<StoredSchedule | null, StoreError>;
+    advanceSchedule(advance: ScheduleAdvance): Effect.Effect<boolean, StoreError>;
     findFamilyTimezone(familyId: FamilyId): Effect.Effect<string | null, StoreError>;
     setFamilyTimezone(
       familyId: FamilyId,
@@ -1217,6 +1290,84 @@ export class RontoStore extends Context.Service<
         },
       );
 
+      const decodeSchedule = Schema.decodeUnknownEffect(StoredSchedule);
+      const isActiveChannelMember = (channelId: ChannelId, memberId: FamilyMemberId) =>
+        sql`SELECT 1 FROM ronto_channel_member
+          WHERE channel_id = ${channelId} AND family_member_id = ${memberId} AND left_at IS NULL`
+          .pipe(Effect.map((rows) => rows.length > 0));
+      const findSchedule = Effect.fn("RontoStore.findSchedule")(function* (scheduleId: string) {
+        const rows = yield* sql`SELECT ${sql.unsafe(selectSchedule)} WHERE schedule.id = ${scheduleId}`;
+        return rows[0] === undefined ? null : yield* decodeSchedule(rows[0]);
+      });
+      const createSchedule = Effect.fn("RontoStore.createSchedule")(
+        function* (channelId: ChannelId, memberId: FamilyMemberId, schedule: NewSchedule, at: DateTime.Utc) {
+          return yield* sql.withTransaction(Effect.gen(function* () {
+            if (!(yield* isActiveChannelMember(channelId, memberId))) return yield* new Cause.NoSuchElementError();
+            const [count] = yield* sql<{ active: number }>`SELECT count(*) AS active FROM ronto_schedule
+              WHERE channel_id = ${channelId} AND status = 'active'`;
+            if ((count?.active ?? 0) >= maxActiveSchedulesPerChannel) {
+              return yield* new ScheduleLimitReached({
+                message: `This channel already has ${maxActiveSchedulesPerChannel} active schedules; cancel one first`,
+              });
+            }
+            const now = DateTime.formatIso(at);
+            yield* sql`INSERT INTO ronto_schedule (
+                id, channel_id, created_by_member_id, title, instruction, cron, timezone,
+                response_mode, status, next_run_at, created_at, updated_at
+              ) VALUES (
+                ${schedule.id}, ${channelId}, ${memberId}, ${schedule.title}, ${schedule.instruction},
+                ${schedule.cron}, ${schedule.timezone}, ${schedule.responseMode}, 'active',
+                ${DateTime.formatIso(schedule.nextRunAt)}, ${now}, ${now}
+              )`;
+            const created = yield* findSchedule(schedule.id);
+            if (created === null) return yield* new Cause.NoSuchElementError();
+            return created;
+          }));
+        },
+      );
+      const listSchedules = Effect.fn("RontoStore.listSchedules")(
+        function* (channelId: ChannelId, memberId: FamilyMemberId) {
+          if (!(yield* isActiveChannelMember(channelId, memberId))) return yield* new Cause.NoSuchElementError();
+          const rows = yield* sql`SELECT ${sql.unsafe(selectSchedule)}
+            WHERE schedule.channel_id = ${channelId}
+            ORDER BY schedule.status = 'active' DESC, schedule.next_run_at, schedule.updated_at DESC
+            LIMIT 50`;
+          return yield* Effect.forEach(rows, (row) => decodeSchedule(row));
+        },
+      );
+      const cancelSchedule = Effect.fn("RontoStore.cancelSchedule")(
+        function* (channelId: ChannelId, memberId: FamilyMemberId, scheduleId: string, at: DateTime.Utc) {
+          return yield* sql.withTransaction(Effect.gen(function* () {
+            if (!(yield* isActiveChannelMember(channelId, memberId))) return yield* new Cause.NoSuchElementError();
+            const cancelled = yield* sql`UPDATE ronto_schedule
+              SET status = 'cancelled', next_run_at = NULL, updated_at = ${DateTime.formatIso(at)}
+              WHERE id = ${scheduleId} AND channel_id = ${channelId} AND status = 'active'
+              RETURNING id`;
+            return cancelled.length === 0 ? null : yield* findSchedule(scheduleId);
+          }));
+        },
+      );
+      const findDueSchedule = Effect.fn("RontoStore.findDueSchedule")(function* (at: DateTime.Utc) {
+        const rows = yield* sql`SELECT ${sql.unsafe(selectSchedule)}
+          WHERE schedule.status = 'active' AND schedule.next_run_at <= ${DateTime.formatIso(at)}
+          ORDER BY schedule.next_run_at, schedule.id
+          LIMIT 1`;
+        return rows[0] === undefined ? null : yield* decodeSchedule(rows[0]);
+      });
+      const advanceSchedule = Effect.fn("RontoStore.advanceSchedule")(function* (advance: ScheduleAdvance) {
+        const now = DateTime.formatIso(advance.at);
+        const updated = yield* sql`UPDATE ronto_schedule SET
+            status = ${advance.status},
+            next_run_at = ${advance.nextRunAt === null ? null : DateTime.formatIso(advance.nextRunAt)},
+            last_run_at = CASE WHEN ${advance.fired ? 1 : 0} = 1 THEN ${now} ELSE last_run_at END,
+            last_error = ${advance.error},
+            updated_at = ${now}
+          WHERE id = ${advance.scheduleId} AND status = 'active'
+            AND next_run_at = ${DateTime.formatIso(advance.expectedRunAt)}
+          RETURNING id`;
+        return updated.length > 0;
+      });
+
       const claimFamilyMemoryMaintenance = Effect.fn("RontoStore.claimFamilyMemoryMaintenance")(
         function* (at: DateTime.Utc) {
           return yield* sql.withTransaction(Effect.gen(function* () {
@@ -1929,6 +2080,11 @@ export class RontoStore extends Context.Service<
         retrySessionSummary,
         enqueueSessionSummaryBackfill,
         listFamilyChannelIds,
+        createSchedule,
+        listSchedules,
+        cancelSchedule,
+        findDueSchedule,
+        advanceSchedule,
         findFamilyTimezone,
         setFamilyTimezone,
         claimFamilyMemoryMaintenance,

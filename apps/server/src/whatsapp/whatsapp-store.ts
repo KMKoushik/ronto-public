@@ -51,6 +51,7 @@ const InboxRow = Schema.Struct({
   canonicalMessageId: Schema.NullOr(Schema.String),
   runId: Schema.NullOr(Schema.String),
   error: Schema.NullOr(Schema.String),
+  scheduleId: Schema.NullOr(Schema.String),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -63,6 +64,7 @@ const OutboxRow = Schema.Struct({
   sourceExternalMessageId: Schema.String,
   sourceSenderExternalId: Schema.String,
   sourceText: Schema.String,
+  sourceScheduled: Schema.BooleanFromBit,
   partIndex: Schema.Int,
   deliveryKind: Schema.Literals(["text", "file", "reaction"]),
   approvalId: Schema.NullOr(Schema.String),
@@ -175,6 +177,25 @@ export interface EnqueueInput {
   readonly at?: DateTime.Utc;
 }
 
+export type ScheduleDestination =
+  | { readonly kind: "unauthorized" }
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "group" | "dm";
+      readonly conversationId: string;
+      readonly externalChannelId: string;
+    };
+
+export interface ScheduledEnqueueInput {
+  readonly scheduleId: Id;
+  readonly slot: DateTime.Utc;
+  readonly creatorMemberId: Id;
+  readonly destination: Extract<ScheduleDestination, { readonly conversationId: string }>;
+  readonly text: string;
+  readonly responseMode: "required" | "optional";
+  readonly at: DateTime.Utc;
+}
+
 export interface OutboxDeliveriesInput {
   readonly inboxId: Id;
   readonly assistantMessageId: Id;
@@ -233,7 +254,7 @@ const selectInbox = `
   sender_external_name, linked_sender_member_id AS sender_member_id,
   sender_member_id AS authority_member_id, inbound_file_id, inbound_caption,
   conversation_id, text, response_mode, trigger_kind,
-  status, canonical_message_id, run_id, error, created_at, updated_at
+  status, canonical_message_id, run_id, error, schedule_id, created_at, updated_at
 `;
 const selectOutbox = `
   id, inbox_id, assistant_message_id, external_channel_id, part_index,
@@ -245,6 +266,8 @@ const selectOutbox = `
     AS source_sender_external_id,
   (SELECT text FROM ronto_whatsapp_inbox source WHERE source.id = inbox_id)
     AS source_text,
+  (SELECT schedule_id IS NOT NULL FROM ronto_whatsapp_inbox source WHERE source.id = inbox_id)
+    AS source_scheduled,
   (SELECT channel_id FROM ronto_file managed WHERE managed.id = file_id)
     AS file_channel_id,
   (SELECT storage_path FROM ronto_file managed WHERE managed.id = file_id)
@@ -342,6 +365,13 @@ export class WhatsappStore extends Context.Service<
     ) => Effect.Effect<boolean, StoreError>;
     readonly enqueue: (
       input: EnqueueInput,
+    ) => Effect.Effect<WhatsappInbox, StoreError>;
+    readonly findScheduleDestination: (
+      channelId: Id,
+      creatorMemberId: Id,
+    ) => Effect.Effect<ScheduleDestination, StoreError>;
+    readonly enqueueScheduled: (
+      input: ScheduledEnqueueInput,
     ) => Effect.Effect<WhatsappInbox, StoreError>;
     readonly reserveMedia: (
       input: EnqueueInput,
@@ -744,6 +774,31 @@ export class WhatsappStore extends Context.Service<
         return conversationId;
       });
 
+      const rotateIdleSession = Effect.fn("WhatsappStore.rotateIdleSession")(function* (
+        conversationId: string,
+        authorityMemberId: string,
+        group: boolean,
+        externalChannelId: string,
+        at: DateTime.Utc,
+      ) {
+        const idle = yield* sql`
+          SELECT id FROM ronto_conversation c WHERE c.id = ${conversationId}
+            AND CAST(strftime('%s', ${iso(at)}) AS INTEGER) - (
+              SELECT MAX(CAST(strftime('%s', activity_at) AS INTEGER)) FROM (
+                SELECT c.created_at AS activity_at
+                UNION ALL SELECT created_at FROM ronto_message WHERE conversation_id = c.id
+                UNION ALL SELECT created_at FROM ronto_whatsapp_inbox WHERE conversation_id = c.id
+                UNION ALL SELECT created_at FROM ronto_whatsapp_media_receipt WHERE conversation_id = c.id
+              )
+            ) >= ${8 * 60 * 60}
+            AND NOT EXISTS (SELECT 1 FROM ronto_agent_run WHERE conversation_id = c.id AND status IN ('queued', 'running'))
+            AND NOT EXISTS (SELECT 1 FROM ronto_whatsapp_inbox WHERE conversation_id = c.id AND status IN ('queued', 'processing'))
+            AND NOT EXISTS (SELECT 1 FROM ronto_whatsapp_media_receipt WHERE conversation_id = c.id AND status = 'receiving')
+        `;
+        if (idle.length === 0) return conversationId;
+        return yield* startLinkedSession(conversationId, authorityMemberId, group, externalChannelId, at);
+      });
+
       // Called inside the receipt transaction so simultaneous arrivals rotate once.
       // Retries retain their original receipt and never create another session.
       const authorizeSession = Effect.fn("WhatsappStore.authorizeSession")(function* (
@@ -758,22 +813,7 @@ export class WhatsappStore extends Context.Service<
           WHERE external_channel_id = ${input.externalChannelId} AND external_message_id = ${input.externalMessageId}
           LIMIT 1`;
         if (existing.length > 0) return match;
-        const idle = yield* sql`
-          SELECT id FROM ronto_conversation c WHERE c.id = ${match.conversationId}
-            AND CAST(strftime('%s', ${iso(at)}) AS INTEGER) - (
-              SELECT MAX(CAST(strftime('%s', activity_at) AS INTEGER)) FROM (
-                SELECT c.created_at AS activity_at
-                UNION ALL SELECT created_at FROM ronto_message WHERE conversation_id = c.id
-                UNION ALL SELECT created_at FROM ronto_whatsapp_inbox WHERE conversation_id = c.id
-                UNION ALL SELECT created_at FROM ronto_whatsapp_media_receipt WHERE conversation_id = c.id
-              )
-            ) >= ${8 * 60 * 60}
-            AND NOT EXISTS (SELECT 1 FROM ronto_agent_run WHERE conversation_id = c.id AND status IN ('queued', 'running'))
-            AND NOT EXISTS (SELECT 1 FROM ronto_whatsapp_inbox WHERE conversation_id = c.id AND status IN ('queued', 'processing'))
-            AND NOT EXISTS (SELECT 1 FROM ronto_whatsapp_media_receipt WHERE conversation_id = c.id AND status = 'receiving')
-        `;
-        if (idle.length === 0) return match;
-        const conversationId = yield* startLinkedSession(
+        const conversationId = yield* rotateIdleSession(
           match.conversationId, match.authorityMemberId, input.group, input.externalChannelId, at,
         );
         return { ...match, conversationId };
@@ -1348,6 +1388,114 @@ export class WhatsappStore extends Context.Service<
             if (row === undefined) return yield* notFound();
             return yield* decodeInbox(row);
           })),
+        findScheduleDestination: (channelId, creatorMemberId) =>
+          Effect.gen(function* () {
+            const channels = yield* sql<{ personalOwnerMemberId: string | null }>`
+              SELECT channel.personal_owner_member_id
+              FROM ronto_channel channel
+              JOIN ronto_channel_member membership
+                ON membership.channel_id = channel.id
+                AND membership.family_member_id = ${creatorMemberId}
+                AND membership.left_at IS NULL
+              WHERE channel.id = ${channelId}
+            `;
+            const channel = channels[0];
+            if (channel === undefined) return { kind: "unauthorized" } as const;
+            if (channel.personalOwnerMemberId === null) {
+              const groups = yield* sql<{ conversationId: string; externalChannelId: string }>`
+                SELECT binding.conversation_id, binding.external_channel_id
+                FROM ronto_conversation_binding binding
+                JOIN ronto_conversation conversation
+                  ON conversation.id = binding.conversation_id
+                  AND conversation.status = 'active'
+                  AND conversation.channel_id = ${channelId}
+                JOIN ronto_conversation_member participant
+                  ON participant.conversation_id = conversation.id
+                  AND participant.family_member_id = ${creatorMemberId}
+                  AND participant.left_at IS NULL
+                WHERE binding.adapter = 'whatsapp' AND binding.external_thread_id = ''
+                ORDER BY binding.created_at DESC, binding.id
+                LIMIT 1
+              `;
+              const group = groups[0];
+              return group === undefined ? { kind: "none" } as const : { kind: "group", ...group } as const;
+            }
+            if (channel.personalOwnerMemberId !== creatorMemberId) return { kind: "unauthorized" } as const;
+            // A personal channel posts only to the DM its owner last used from a still-linked identity.
+            const chats = yield* sql<{ externalChannelId: string }>`
+              SELECT inbox.external_channel_id
+              FROM ronto_whatsapp_inbox inbox
+              JOIN ronto_conversation conversation ON conversation.id = inbox.conversation_id
+              JOIN ronto_family_member member ON member.id = ${creatorMemberId}
+              JOIN ronto_external_identity identity
+                ON identity.adapter = 'whatsapp'
+                AND identity.user_id = member.user_id
+                AND identity.external_user_id = inbox.sender_external_id
+              WHERE conversation.channel_id = ${channelId}
+                AND inbox.linked_sender_member_id = ${creatorMemberId}
+                AND inbox.schedule_id IS NULL
+              ORDER BY inbox.created_at DESC, inbox.id
+              LIMIT 1
+            `;
+            const conversations = yield* sql<{ conversationId: string }>`
+              SELECT conversation.id AS conversation_id
+              FROM ronto_conversation conversation
+              JOIN ronto_family_member member ON member.id = ${creatorMemberId}
+              JOIN ronto_conversation_member participant
+                ON participant.conversation_id = conversation.id
+                AND participant.family_member_id = member.id
+                AND participant.left_at IS NULL
+              LEFT JOIN ronto_whatsapp_dm_selection selection
+                ON selection.conversation_id = conversation.id
+                AND selection.user_id = member.user_id
+              WHERE conversation.channel_id = ${channelId} AND conversation.status = 'active'
+              ORDER BY selection.conversation_id IS NOT NULL DESC, conversation.created_at DESC, conversation.id
+              LIMIT 1
+            `;
+            const chat = chats[0];
+            const conversation = conversations[0];
+            if (chat === undefined || conversation === undefined) return { kind: "none" } as const;
+            return {
+              kind: "dm",
+              conversationId: conversation.conversationId,
+              externalChannelId: chat.externalChannelId,
+            } as const;
+          }),
+        enqueueScheduled: (input) =>
+          sql.withTransaction(Effect.gen(function* () {
+            const externalMessageId = `schedule:${input.scheduleId}:${iso(input.slot)}`;
+            const { externalChannelId } = input.destination;
+            const existing = yield* sql`
+              SELECT ${sql.unsafe(selectInbox)} FROM ronto_whatsapp_inbox
+              WHERE external_channel_id = ${externalChannelId} AND external_message_id = ${externalMessageId}
+            `;
+            if (existing[0] !== undefined) return yield* decodeInbox(existing[0]);
+            const conversationId = yield* rotateIdleSession(
+              input.destination.conversationId,
+              input.creatorMemberId,
+              input.destination.kind === "group",
+              externalChannelId,
+              input.at,
+            );
+            const rows = yield* sql`
+              INSERT INTO ronto_whatsapp_inbox (
+                id, external_channel_id, external_message_id,
+                sender_external_id, sender_external_name, sender_member_id,
+                linked_sender_member_id, conversation_id, text,
+                response_mode, trigger_kind, status, schedule_id, created_at, updated_at
+              ) VALUES (
+                ${randomUUID()}, ${externalChannelId}, ${externalMessageId},
+                ${`schedule:${input.scheduleId}`}, 'Scheduled task', ${input.creatorMemberId},
+                NULL, ${conversationId}, ${input.text},
+                ${input.responseMode}, 'command', 'queued', ${input.scheduleId},
+                ${iso(input.at)}, ${iso(input.at)}
+              )
+              RETURNING ${sql.unsafe(selectInbox)}
+            `;
+            const row = rows[0];
+            if (row === undefined) return yield* notFound();
+            return yield* decodeInbox(row);
+          })),
         reserveMedia: (input) =>
           sql.withTransaction(
             Effect.gen(function* () {
@@ -1581,9 +1729,12 @@ export class WhatsappStore extends Context.Service<
             `;
             const row = rows[0];
             if (row === undefined) return;
+            const inbox = yield* decodeInbox(row);
             yield* enqueueFailureNotice(
-              yield* decodeInbox(row),
-              "I hit an error before I could finish this request. Your message was saved, but I don't have a completed answer.",
+              inbox,
+              inbox.scheduleId === null
+                ? "I hit an error before I could finish this request. Your message was saved, but I don't have a completed answer."
+                : "I hit an error before I could finish a scheduled task, so it didn't complete this time.",
               at,
               notifyOptional,
             );
@@ -1617,9 +1768,12 @@ export class WhatsappStore extends Context.Service<
                 RETURNING ${sql.unsafe(selectInbox)}
               `;
               for (const row of rows) {
+                const inbox = yield* decodeInbox(row);
                 yield* enqueueFailureNotice(
-                  yield* decodeInbox(row),
-                  "Ronto restarted before I could finish this request. Your message was saved, but I don't have a completed answer.",
+                  inbox,
+                  inbox.scheduleId === null
+                    ? "Ronto restarted before I could finish this request. Your message was saved, but I don't have a completed answer."
+                    : "Ronto restarted before I could finish a scheduled task, so it didn't complete this time.",
                   at,
                 );
               }

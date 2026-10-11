@@ -98,6 +98,7 @@ export class ConversationTurn extends Context.Service<
       connectorMemberId: FamilyMemberId | null,
       speaker: ExternalSpeaker | undefined,
       hooks: ExternalTurnHooks,
+      scheduled: boolean,
     ): Effect.Effect<
       ConversationTurnOutcome,
       ConversationTurnNotFound | AgentInvocationError
@@ -146,6 +147,7 @@ export class ConversationTurn extends Context.Service<
           readonly externalMessageId: string | null;
           readonly connectorMemberId?: FamilyMemberId | null;
           readonly externalSpeaker?: ExternalSpeaker;
+          readonly scheduled?: boolean;
           readonly observer?: ConversationTurnObserver;
           readonly hooks?: ExternalTurnHooks;
         },
@@ -268,7 +270,7 @@ export class ConversationTurn extends Context.Service<
                         .pipe(Effect.orDie);
                     }
                     const connectorOptions = options.source === "whatsapp"
-                      ? { connectorMemberId: options.connectorMemberId ?? null }
+                      ? { connectorMemberId: options.connectorMemberId ?? null, scheduled: options.scheduled ?? false }
                       : {};
                     const generationOptions = options.externalSpeaker === undefined
                       ? {
@@ -442,6 +444,7 @@ export class ConversationTurn extends Context.Service<
           connectorMemberId: FamilyMemberId | null,
           speaker: ExternalSpeaker | undefined,
           hooks: ExternalTurnHooks,
+          scheduled: boolean,
         ) {
           const options = speaker === undefined
             ? {
@@ -449,6 +452,7 @@ export class ConversationTurn extends Context.Service<
                 responseMode,
                 externalMessageId,
                 connectorMemberId,
+                scheduled,
                 hooks,
               }
             : {
@@ -457,6 +461,7 @@ export class ConversationTurn extends Context.Service<
                 externalMessageId,
                 connectorMemberId,
                 externalSpeaker: speaker,
+                scheduled,
                 hooks,
               };
           return yield* runTurn(

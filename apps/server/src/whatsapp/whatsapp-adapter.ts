@@ -42,6 +42,7 @@ type StartConversationResult =
 interface ActiveWhatsappTurn {
   fiber: Fiber.Fiber<unknown, unknown> | undefined;
   interruptRequested: boolean;
+  readonly scheduled: boolean;
 }
 
 const failureMessage = (cause: unknown): string =>
@@ -114,7 +115,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
     const interruptSupersededTurn = (inbox: WhatsappInbox) =>
       Effect.sync(() => {
         const active = activeTurns.get(inbox.conversationId);
-        if (active === undefined) return;
+        if (active === undefined || active.scheduled) return;
         active.interruptRequested = true;
         active.fiber?.interruptUnsafe();
       });
@@ -498,9 +499,11 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
         content,
         externalMessageId(inbox),
         inbox.responseMode,
-        inbox.senderMemberId === null
-          ? null
-          : FamilyMemberId.make(inbox.senderMemberId),
+        inbox.scheduleId !== null
+          ? FamilyMemberId.make(inbox.authorityMemberId)
+          : inbox.senderMemberId === null
+            ? null
+            : FamilyMemberId.make(inbox.senderMemberId),
         inbox.senderMemberId === null
           ? { id: inbox.senderExternalId, name: inbox.senderExternalName }
           : undefined,
@@ -510,6 +513,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
           onRunPersisted: (run) =>
             store.markRun(inbox.id, run.id).pipe(Effect.orDie),
         },
+        inbox.scheduleId !== null,
       ).pipe(
         Effect.timeout(turnTimeout),
         Effect.catchTag("TimeoutError", (cause) =>
@@ -526,7 +530,8 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
           ),
         ),
       );
-      if (outcome.disposition === "silent") {
+      // A scheduled post has no source message to react to.
+      if (outcome.disposition === "silent" || outcome.disposition === "react" && inbox.scheduleId !== null) {
         if (inbox.responseMode === "required") {
           return yield* Effect.die("A required WhatsApp turn completed silently");
         }
@@ -568,8 +573,9 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
       readonly sourceExternalMessageId: string;
       readonly sourceSenderExternalId: string;
       readonly sourceText: string;
+      readonly sourceScheduled: boolean;
     }): WhatsappQuote | undefined =>
-      outbox.partIndex === 0
+      outbox.partIndex === 0 && !outbox.sourceScheduled
         ? {
             externalMessageId: outbox.sourceExternalMessageId,
             senderExternalId: outbox.sourceSenderExternalId,
@@ -701,6 +707,7 @@ export const WhatsappAdapterLive = Layer.effectDiscard(
         const active: ActiveWhatsappTurn = {
           fiber: undefined,
           interruptRequested: false,
+          scheduled: inbox.scheduleId !== null,
         };
         activeTurns.set(inbox.conversationId, active);
         const fiber = yield* processInbox(inbox).pipe(
