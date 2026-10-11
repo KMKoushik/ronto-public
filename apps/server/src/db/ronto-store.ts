@@ -232,6 +232,12 @@ export class RontoStore extends Context.Service<
     listFamilyChannelIds(
       familyId: FamilyId,
     ): Effect.Effect<ReadonlyArray<ChannelId>, StoreError>;
+    findFamilyTimezone(familyId: FamilyId): Effect.Effect<string | null, StoreError>;
+    setFamilyTimezone(
+      familyId: FamilyId,
+      timezone: string,
+      at: DateTime.Utc,
+    ): Effect.Effect<void, StoreError>;
     claimFamilyMemoryMaintenance(
       at: DateTime.Utc,
     ): Effect.Effect<typeof FamilyMemoryMaintenanceJob.Type | null, StoreError>;
@@ -1192,6 +1198,25 @@ export class RontoStore extends Context.Service<
         },
       );
 
+      const findFamilyTimezoneRow = SqlSchema.findOne({
+        Request: FamilyId,
+        Result: Schema.Struct({ timezone: Schema.NullOr(Schema.String) }),
+        execute: (familyId) => sql`SELECT timezone FROM ronto_family WHERE id = ${familyId}`,
+      });
+      const findFamilyTimezone = Effect.fn("RontoStore.findFamilyTimezone")(
+        function* (familyId: FamilyId) {
+          return (yield* findFamilyTimezoneRow(familyId)).timezone;
+        },
+      );
+      const setFamilyTimezone = Effect.fn("RontoStore.setFamilyTimezone")(
+        function* (familyId: FamilyId, timezone: string, at: DateTime.Utc) {
+          const updated = yield* sql`UPDATE ronto_family
+            SET timezone = ${timezone}, updated_at = ${DateTime.formatIso(at)}
+            WHERE id = ${familyId} RETURNING id`;
+          if (updated.length === 0) return yield* new Cause.NoSuchElementError();
+        },
+      );
+
       const claimFamilyMemoryMaintenance = Effect.fn("RontoStore.claimFamilyMemoryMaintenance")(
         function* (at: DateTime.Utc) {
           return yield* sql.withTransaction(Effect.gen(function* () {
@@ -1904,6 +1929,8 @@ export class RontoStore extends Context.Service<
         retrySessionSummary,
         enqueueSessionSummaryBackfill,
         listFamilyChannelIds,
+        findFamilyTimezone,
+        setFamilyTimezone,
         claimFamilyMemoryMaintenance,
         completeFamilyMemoryMaintenance,
         retryFamilyMemoryMaintenance,

@@ -1,6 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { ChannelId, ConversationId, FamilyMemberId } from "@ronto/api";
-import { Context, Effect, Schema } from "effect";
+import { Context, DateTime, Effect, Option, Schema } from "effect";
 import { Type } from "typebox";
 
 import { RontoStore } from "../db/ronto-store.ts";
@@ -20,6 +20,10 @@ const readParameters = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   textOffset: Type.Optional(Type.Integer({ minimum: 0, description: "Unicode code-point offset within message text, from nextTextOffset. For long messages, use limit 1 and afterSequence equal to the message sequence minus one." })),
 });
+const timezoneParameters = Type.Object({
+  timezone: Type.String({ minLength: 1, maxLength: 64, description: "IANA timezone name such as Australia/Sydney or America/New_York, or UTC. Abbreviations like EST and fixed offsets are rejected." }),
+});
+const ianaTimezone = /^(?:UTC|(?!Etc\/)[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+)$/;
 const nonnegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const pageLimit = Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })));
 const SearchInput = Schema.Struct({
@@ -66,6 +70,27 @@ export const createChatContextTools = (
         Effect.andThen(store.listChannelMembers(channelId, memberId)),
       ), { signal });
       const result = { channelId, count: members.length, members };
+      return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
+    },
+  };
+  const timezoneTool: AgentTool<typeof timezoneParameters> = {
+    name: "set_family_timezone",
+    label: "Set Family Timezone",
+    description: "Save the family's timezone, used for local dates, times, and reminders across all channels. Only use when a family member states where the family lives, says it moved, or corrects the stored timezone. Never guess it from a single message's wording.",
+    parameters: timezoneParameters,
+    execute: async (_id, parameters, signal) => {
+      const requested = Schema.decodeUnknownSync(Schema.Struct({ timezone: Schema.String }))(parameters).timezone;
+      const zone = DateTime.zoneMakeNamed(requested);
+      if (!ianaTimezone.test(requested) || Option.isNone(zone))
+        throw new Error(`Unknown timezone ${JSON.stringify(requested)}; use an IANA name such as Australia/Sydney`);
+      const timezone = DateTime.zoneToString(zone.value);
+      const result = await Effect.runPromise(Effect.gen(function* () {
+        const channel = yield* store.findChannel(channelId, memberId);
+        if (channel === null) return yield* Effect.fail(new Error("Channel unavailable"));
+        const now = yield* DateTime.now;
+        yield* store.setFamilyTimezone(channel.familyId, timezone, now);
+        return { timezone, localTime: DateTime.formatIsoZoned(DateTime.setZone(now, zone.value)) };
+      }), { signal });
       return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
     },
   };
@@ -130,5 +155,5 @@ export const createChatContextTools = (
       return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
     },
   };
-  return [familyTool, channelTool, searchTool, readTool];
+  return [familyTool, channelTool, timezoneTool, searchTool, readTool];
 };
