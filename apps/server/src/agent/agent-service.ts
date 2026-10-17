@@ -1,8 +1,4 @@
-import {
-  Agent,
-  compact,
-  convertToLlm,
-} from "@earendil-works/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import type {
   Api,
   AssistantMessage,
@@ -17,7 +13,12 @@ import type {
 import { createModels } from "@earendil-works/pi-ai";
 import { opencodeGoProvider } from "@earendil-works/pi-ai/providers/opencode-go";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
-import { formatSkillsForPrompt, loadSkillsFromDir } from "@earendil-works/pi-coding-agent";
+import {
+  compact,
+  convertToLlm,
+  formatSkillsForPrompt,
+  loadSkillsFromDir,
+} from "@earendil-works/pi-coding-agent";
 import {
   createRaindropPiAgent,
   type RaindropPiAgentOptions,
@@ -671,18 +672,17 @@ export class AgentService extends Context.Service<
                 projected,
                 checkpointData(checkpoint),
                 model.contextWindow,
-                async (preparation, compactionSignal) => {
-                  const result = await compact(
+                (preparation, compactionSignal) =>
+                  compact(
                     preparation,
-                    models,
                     withProviderSession(model, conversationId),
+                    undefined,
+                    undefined,
                     undefined,
                     compactionSignal,
                     "high",
-                  );
-                  if (!result.ok) throw result.error;
-                  return result.value;
-                },
+                    models.streamSimple.bind(models),
+                  ),
                 signal,
               ),
             catch: (cause) =>
