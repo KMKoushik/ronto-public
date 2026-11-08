@@ -26,6 +26,7 @@ import {
   MessageDto,
   NotFound,
   RontoApi,
+  ScheduleDto,
   FileId,
   WhatsappBindingDto,
   WhatsappClaimDto,
@@ -597,6 +598,24 @@ export const RontoApiHandlersNoDeps = HttpApiBuilder.group(
         return (yield* store.listChannels(member.id).pipe(Effect.orDie)).map(
           channelDto,
         );
+      }),
+      listSchedules: Effect.fn("RontoApi.listSchedules")(function* ({ params }) {
+        const member = yield* currentMember(params.familyId);
+        return (yield* store.listFamilySchedules(params.familyId, member.id).pipe(
+          Effect.orDie,
+        )).map((schedule) => new ScheduleDto(schedule));
+      }),
+      cancelSchedule: Effect.fn("RontoApi.cancelSchedule")(function* ({ params }) {
+        const member = yield* currentMember(params.familyId);
+        const schedule = yield* store.cancelFamilySchedule(
+          params.familyId, member.id, params.scheduleId, yield* DateTime.now,
+        ).pipe(
+          Effect.catch((error) => error._tag === "ScheduleInactive"
+            ? new Conflict({ message: error.message })
+            : Effect.die(error)),
+        );
+        if (schedule === null) return yield* new NotFound({ message: "Schedule not found" });
+        return new ScheduleDto(schedule);
       }),
       createChannel: Effect.fn("RontoApi.createChannel")(function* ({
         params,

@@ -51,6 +51,7 @@ import { WorkspaceSidebar } from '@/components/workspace-sidebar'
 import { ChatComposer } from '@/components/chat-composer'
 import { PlatformAdministration } from '@/components/platform-administration'
 import { SettingsDialog } from '@/components/settings-dialog'
+import { SchedulesDialog } from '@/components/schedules-dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError, TurnCancelledError } from '@/lib/api'
@@ -1310,6 +1311,7 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
   const [familyOpen, setFamilyOpen] = useState(false)
   const [whatsappOpen, setWhatsappOpen] = useState(false)
   const [connectorsOpen, setConnectorsOpen] = useState(false)
+  const [schedulesOpen, setSchedulesOpen] = useState(false)
   const timelineViewport = useRef<HTMLDivElement>(null)
   const [timelineContent, setTimelineContent] = useState<HTMLDivElement | null>(null)
   const shouldAutoScroll = useRef(true)
@@ -1321,6 +1323,7 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
   const menuButton = useRef<HTMLButtonElement>(null)
   const memoryButton = useRef<HTMLButtonElement>(null)
   const settingsButton = useRef<HTMLButtonElement>(null)
+  const schedulesButton = useRef<HTMLButtonElement>(null)
   const activeTurn = useRef<AbortController | null>(null)
 
   function cancelBottomChase() {
@@ -1737,7 +1740,9 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
         onManageFamily={() => setFamilyOpen(true)}
         onManageWhatsapp={() => setWhatsappOpen(true)}
         onManageConnectors={() => setConnectorsOpen(true)}
+        onManageSchedules={() => { setMobileOpen(false); setSchedulesOpen(true) }}
         settingsButtonRef={settingsButton}
+        schedulesButtonRef={schedulesButton}
       />
 
       <section className="chat-workspace" inert={mobileOpen || undefined}>
@@ -1784,6 +1789,10 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
       {familyOpen && <FamilyDialog familyId={familyId} channels={channels} onClose={() => { setFamilyOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
       {whatsappOpen && <WhatsappDialog familyId={familyId} conversationId={selectedId} isPrimary={membership.member.role === 'primary'} onClose={() => { setWhatsappOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
       {connectorsOpen && <ConnectorsDialog familyId={familyId} onClose={() => { setConnectorsOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
+      {schedulesOpen && <SchedulesDialog familyId={familyId} onClose={() => {
+        setSchedulesOpen(false)
+        requestAnimationFrame(() => { (window.matchMedia('(min-width: 1024px)').matches ? schedulesButton : menuButton).current?.focus() })
+      }} />}
     </main>
   )
 }

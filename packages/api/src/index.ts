@@ -386,6 +386,24 @@ export class ChannelDto extends Schema.Class<ChannelDto>("ChannelDto")({
   updatedAt: Schema.DateTimeUtc,
 }) {}
 
+export class ScheduleDto extends Schema.Class<ScheduleDto>("ScheduleDto")({
+  id: Schema.String,
+  channelId: ChannelId,
+  channelName: Schema.String,
+  createdByMemberId: FamilyMemberId,
+  creatorName: Schema.String,
+  title: Schema.String,
+  instruction: Schema.String,
+  cron: Schema.NullOr(Schema.String),
+  timezone: Schema.String,
+  responseMode: Schema.Literals(["required", "optional"]),
+  status: Schema.Literals(["active", "completed", "cancelled"]),
+  nextRunAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  lastRunAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  lastError: Schema.NullOr(Schema.String),
+  createdAt: Schema.DateTimeUtcFromString,
+}) {}
+
 export class ChannelMemoryDto extends Schema.Class<ChannelMemoryDto>(
   "ChannelMemoryDto",
 )({
@@ -723,6 +741,16 @@ export class RontoApiGroup extends HttpApiGroup.make("ronto")
     HttpApiEndpoint.get("listChannels", "/families/:familyId/channels", {
       params: { familyId: FamilyId },
       success: Schema.Array(ChannelDto),
+      error: ApplicationErrors,
+    }),
+    HttpApiEndpoint.get("listSchedules", "/families/:familyId/schedules", {
+      params: { familyId: FamilyId },
+      success: Schema.Array(ScheduleDto),
+      error: ApplicationErrors,
+    }),
+    HttpApiEndpoint.post("cancelSchedule", "/families/:familyId/schedules/:scheduleId/cancel", {
+      params: { familyId: FamilyId, scheduleId: Schema.String },
+      success: ScheduleDto,
       error: ApplicationErrors,
     }),
     HttpApiEndpoint.post("createChannel", "/families/:familyId/channels", {

@@ -1,5 +1,6 @@
 import {
   ArrowRightStartOnRectangleIcon,
+  CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   ChevronDownIcon,
   EllipsisHorizontalIcon,
@@ -33,7 +34,7 @@ function conversationGroup(conversation: ConversationDto) {
   return 'Earlier'
 }
 
-export function WorkspaceSidebar({ channels, conversations, selectedChannelId, selectedId, workingConversationId, me, familyId, mobileOpen, onClose, onSelectFamily, onOpenPlatform, onSelectChannel, onSelect, onDelete, onCreateChannel, onCreate, onSignOut, onManageFamily, onManageWhatsapp, onManageConnectors, isPrimary, settingsButtonRef }: {
+export function WorkspaceSidebar({ channels, conversations, selectedChannelId, selectedId, workingConversationId, me, familyId, mobileOpen, onClose, onSelectFamily, onOpenPlatform, onSelectChannel, onSelect, onDelete, onCreateChannel, onCreate, onSignOut, onManageFamily, onManageWhatsapp, onManageConnectors, onManageSchedules, isPrimary, settingsButtonRef, schedulesButtonRef }: {
   channels: ReadonlyArray<ChannelDto>
   conversations: ReadonlyArray<ConversationDto>
   selectedChannelId: ChannelId | null
@@ -44,6 +45,7 @@ export function WorkspaceSidebar({ channels, conversations, selectedChannelId, s
   isPrimary: boolean
   mobileOpen: boolean
   settingsButtonRef: RefObject<HTMLButtonElement | null>
+  schedulesButtonRef: RefObject<HTMLButtonElement | null>
   onClose: () => void
   onSelectFamily: (id: FamilyId) => void
   onOpenPlatform: () => void
@@ -56,6 +58,7 @@ export function WorkspaceSidebar({ channels, conversations, selectedChannelId, s
   onManageFamily: () => void
   onManageWhatsapp: () => void
   onManageConnectors: () => void
+  onManageSchedules: () => void
 }) {
   const [creatingChannel, setCreatingChannel] = useState(false)
   const [pending, setPending] = useState(false)
@@ -141,6 +144,7 @@ export function WorkspaceSidebar({ channels, conversations, selectedChannelId, s
 
       <div className="sidebar-actions">
         <Button type="button" variant="ghost" className="new-chat-button" disabled={selectedChannelId === null || pending} onClick={() => void create()}><PencilSquareIcon className="size-4 shrink-0 fill-current" /> New chat <PlusIcon className="ml-auto size-4 shrink-0 fill-current" aria-hidden="true" /></Button>
+        <Button ref={schedulesButtonRef} type="button" variant="ghost" className="sidebar-schedules-button" aria-haspopup="dialog" onClick={onManageSchedules}><CalendarDaysIcon className="size-4 shrink-0 fill-current" aria-hidden="true" />Schedules</Button>
         <div className="sidebar-search"><MagnifyingGlassIcon className="size-4 shrink-0 fill-current" aria-hidden="true" /><input name="chat-search" type="search" aria-label="Search chats in this channel" placeholder="Search chats" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
       </div>
 

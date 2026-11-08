@@ -12,6 +12,15 @@ export const meQuery = () =>
 export const channelsQuery = (familyId: FamilyId) =>
   queryOptions({ queryKey: ['families', familyId, 'channels'], queryFn: ({ signal }) => api.listChannels(familyId, signal), staleTime: minute })
 
+export const schedulesQuery = (familyId: FamilyId) =>
+  queryOptions({
+    queryKey: ['families', familyId, 'schedules'],
+    queryFn: ({ signal }) => api.listSchedules(familyId, signal),
+    staleTime: 5_000,
+    refetchOnMount: 'always',
+    refetchInterval: 30_000,
+  })
+
 export const conversationsQuery = (familyId: FamilyId) =>
   queryOptions({ queryKey: ['families', familyId, 'conversations'], queryFn: ({ signal }) => api.listConversations(familyId, signal), staleTime: 30_000 })
 

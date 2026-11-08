@@ -142,7 +142,7 @@ export const createScheduleTools = (
   const createTool: AgentTool<typeof createParameters> = {
     name: "create_schedule",
     label: "Create Schedule",
-    description: "Schedule a reminder or task for this channel. When it is due, Ronto runs the instruction as a new turn in this channel and posts the result to the channel's WhatsApp chat: its linked group, or for a personal channel the member's WhatsApp DM. Provide exactly one of at (one time) or cron (repeating). Use only when a family member asks for something to happen later or repeatedly. Confirm the title, local time, and repeat pattern back to them.",
+    description: "Schedule a reminder or task for this channel. Call list_schedules first: an earlier attempt may have created the task even if its reply failed or was interrupted. Do not duplicate an existing task for the same request. For a requested change, identify and cancel the intended task before creating its replacement. When due, Ronto runs the instruction as a new turn and posts to this channel's linked WhatsApp group or the member's personal WhatsApp DM. Provide exactly one of at (one time) or cron (repeating). Use only when a family member asks for something to happen later or repeatedly. Confirm the title, local time, and repeat pattern back to them.",
     parameters: createParameters,
     execute: async (_id, parameters, signal) => {
       const input = Schema.decodeUnknownSync(CreateInput)(parameters);

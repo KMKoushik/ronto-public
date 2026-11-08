@@ -12,6 +12,7 @@ import {
   MessageContent,
   MessageId,
   MessageSenderType,
+  ScheduleDto,
   TurnStreamEvent,
   UserId,
   InvitationInput,
@@ -200,6 +201,8 @@ const AgentRun = Schema.Struct({
 })
 const ConversationList = Schema.Array(Conversation)
 const ChannelList = Schema.Array(Channel)
+const Schedule = Schema.toCodecJson(ScheduleDto)
+const ScheduleList = Schema.Array(Schedule)
 const ChannelMemory = Schema.Struct({
   channelId: ChannelId,
   content: Schema.String,
@@ -462,6 +465,8 @@ export const api = {
     request('/api/onboarding', Me, { method: 'POST', body: JSON.stringify({ familyName }) }),
   listConversations: (familyId: FamilyId, signal?: AbortSignal) => request(`${familyPath(familyId)}/conversations`, ConversationList, undefined, signal),
   listChannels: (familyId: FamilyId, signal?: AbortSignal) => request(`${familyPath(familyId)}/channels`, ChannelList, undefined, signal),
+  listSchedules: (familyId: FamilyId, signal?: AbortSignal) => request(`${familyPath(familyId)}/schedules`, ScheduleList, undefined, signal),
+  cancelSchedule: (familyId: FamilyId, scheduleId: string) => request(`${familyPath(familyId)}/schedules/${encodeURIComponent(scheduleId)}/cancel`, Schedule, { method: 'POST' }),
   createChannel: (familyId: FamilyId, name: string, purpose: string) =>
     request(`${familyPath(familyId)}/channels`, Channel, { method: 'POST', body: JSON.stringify({ name, purpose }) }),
   setChannelMemberAccess: (familyId: FamilyId, channelId: ChannelId, memberId: FamilyMemberId, active: boolean) =>
