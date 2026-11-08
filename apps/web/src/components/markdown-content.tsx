@@ -2,7 +2,7 @@ import { createCodePlugin } from '@streamdown/code'
 import { Streamdown } from 'streamdown'
 
 const code = createCodePlugin({
-  themes: ['catppuccin-mocha', 'catppuccin-mocha'],
+  themes: ['github-light', 'github-dark'],
 })
 
 const components = {

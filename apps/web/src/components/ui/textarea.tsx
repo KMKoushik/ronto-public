@@ -1,12 +1,12 @@
-import type { TextareaHTMLAttributes } from 'react'
+import type { ComponentPropsWithRef } from 'react'
 
 import { cn } from '@/lib/utils'
 
-function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function Textarea({ className, ...props }: ComponentPropsWithRef<'textarea'>) {
   return (
     <textarea
       className={cn(
-        'min-h-11 w-full resize-none rounded-lg bg-cat-surface-0 px-3 py-2.5 text-base text-cat-text ring-1 ring-cat-overlay-1 outline-none placeholder:text-cat-subtext-0 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-cat-mauve disabled:cursor-not-allowed disabled:opacity-50 sm:py-2 sm:text-sm',
+        'min-h-9 w-full min-w-0 resize-none rounded-lg border border-line-strong bg-panel px-3 py-2 text-base text-ink outline-none placeholder:text-faint focus-visible:border-focus focus-visible:outline-2 -outline-offset-1 focus-visible:outline-focus aria-invalid:border-danger aria-invalid:focus-visible:outline-danger disabled:cursor-not-allowed disabled:bg-soft disabled:opacity-50 sm:text-sm pointer-coarse:min-h-11',
         className,
       )}
       {...props}

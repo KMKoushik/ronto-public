@@ -2,24 +2,19 @@ import {
   ArrowRightIcon,
   ArrowDownTrayIcon,
   Bars3Icon,
-  ChatBubbleLeftRightIcon,
   CheckIcon,
+  ChevronDownIcon,
   ClipboardDocumentIcon,
-  ChevronLeftIcon,
   ChevronRightIcon,
   DocumentIcon,
   EyeIcon,
-  ArrowRightStartOnRectangleIcon,
   BookOpenIcon,
-  PaperClipIcon,
-  PaperAirplaneIcon,
-  PlusIcon,
   LockClosedIcon,
-  StopIcon,
-  TrashIcon,
+  SparklesIcon,
+  CalendarDaysIcon,
+  MapIcon,
   UserGroupIcon,
   WrenchScrewdriverIcon,
-  XMarkIcon,
 } from '@heroicons/react/16/solid'
 import type {
   ChannelDto,
@@ -51,7 +46,11 @@ import {
 } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Brand } from '@/components/brand'
+import { WorkspaceSidebar } from '@/components/workspace-sidebar'
+import { ChatComposer } from '@/components/chat-composer'
 import { PlatformAdministration } from '@/components/platform-administration'
+import { SettingsDialog } from '@/components/settings-dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError, TurnCancelledError } from '@/lib/api'
@@ -77,6 +76,7 @@ import {
   whatsappIdentitiesQuery,
 } from '@/lib/queries'
 import { cn } from '@/lib/utils'
+import { conversationTitle } from '@/lib/conversations'
 import { useAppNavigate, useAppSearch } from '@/routes'
 
 type AuthMode = 'sign-in' | 'sign-up'
@@ -98,20 +98,6 @@ type WorkActivity =
       readonly isError: boolean
       readonly running?: boolean
     }
-
-function Brand({ inverse = false }: { inverse?: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className={cn(
-        'grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold',
-        inverse ? 'bg-cat-text text-cat-crust' : 'bg-cat-mauve text-cat-crust',
-      )}>
-        R
-      </div>
-      <p className="text-base font-semibold tracking-tight text-cat-text">Ronto</p>
-    </div>
-  )
-}
 
 function AuthScreen({ onAuthenticated, invitation }: { onAuthenticated: () => Promise<void>; invitation: typeof InvitationInput.Type | undefined }) {
   const validated = useQuery({
@@ -156,52 +142,51 @@ function AuthScreen({ onAuthenticated, invitation }: { onAuthenticated: () => Pr
   }
 
   return (
-    <main className="isolate grid min-h-dvh bg-cat-base lg:grid-cols-[9fr_11fr]">
-      <section className="flex min-w-0 flex-col justify-between gap-16 bg-cat-crust p-6 text-cat-text sm:p-10 lg:p-14">
-        <Brand inverse />
-        <div className="flex max-w-[36rem] flex-col gap-5">
-          <p className="font-mono text-sm tracking-wide text-cat-peach">PRIVATE FAMILY SPACE</p>
-          <h1 className="text-balance text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
-            Keep the family thread together.
+    <main className="isolate grid min-h-dvh bg-canvas text-ink lg:grid-cols-2">
+      <section className="flex min-w-0 flex-col justify-between gap-10 border-b border-line bg-panel p-6 sm:p-10 lg:gap-20 lg:border-r lg:border-b-0 lg:p-14">
+        <Brand />
+        <div className="flex max-w-lg flex-col gap-5 lg:py-12">
+          <h1 className="max-w-[14ch] text-3xl font-medium tracking-tight text-balance sm:text-4xl lg:text-5xl">
+            A little help for the life you share.
           </h1>
-          <p className="max-w-[48ch] text-pretty text-base/7 text-cat-subtext-0 sm:text-sm/6">
-            Ronto is one quiet place for plans, questions, and the details everyone
-            needs to remember.
+          <p className="max-w-[40ch] text-base/7 text-pretty text-muted">
+            One quiet place for your family’s plans, everyday questions, and the details worth remembering.
           </p>
         </div>
-        <p className="text-base text-cat-subtext-0 sm:text-sm">Private by design. Just your family and Ronto.</p>
+        <p className="flex items-center gap-2 text-sm/6 text-muted max-lg:hidden"><LockClosedIcon aria-hidden="true" className="size-4 shrink-0" />Just your family and Ronto. Private by design.</p>
       </section>
 
-      <section className="flex min-w-0 items-center justify-center p-6 sm:p-10">
-        <div className="flex w-full max-w-xs flex-col gap-8">
+      <section className="flex min-w-0 items-center justify-center px-6 py-10 sm:p-10 lg:py-16">
+        <div className="flex w-full max-w-xs flex-col gap-7">
           <div className="flex flex-col gap-2">
-            <h2 className="text-balance text-2xl font-semibold tracking-tight text-cat-text">
+            <h2 className="text-2xl font-semibold tracking-tight text-balance">
               {mode === 'sign-in' ? 'Welcome back' : 'Create your account'}
             </h2>
-            <p className="text-pretty text-base/7 text-cat-subtext-0 sm:text-sm/6">
+            <p className="text-base/7 text-pretty text-muted sm:text-sm/6">
               {mode === 'sign-in'
                 ? hasInvite ? 'Sign in to join your family on Ronto.' : 'Sign in to pick up where your family left off.'
                  : 'Create an account to accept your invitation.'}
             </p>
           </div>
 
-          <form className="flex flex-col gap-5" onSubmit={submit}>
+          {hasInvite && <p className="flex items-start gap-2 rounded-lg bg-soft p-3 text-base/7 text-muted sm:text-sm/6"><CheckIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-success" />Your invitation is ready. Sign in or create an account to accept it.</p>}
+          <form className="flex flex-col gap-4" onSubmit={submit}>
             {mode === 'sign-up' && (
               <div className="flex flex-col gap-2">
-                <label htmlFor="name" className="text-base font-medium text-cat-subtext-1 sm:text-sm">
+                <label htmlFor="name" className="text-base font-medium sm:text-sm">
                   Name
                 </label>
                 <Input id="name" name="name" autoComplete="name" required />
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <label htmlFor="email" className="text-base font-medium text-cat-subtext-1 sm:text-sm">
+              <label htmlFor="email" className="text-base font-medium sm:text-sm">
                 Email
               </label>
               <Input id="email" name="email" type="email" autoComplete="email" required />
             </div>
             <div className="flex flex-col gap-2">
-              <label htmlFor="password" className="text-base font-medium text-cat-subtext-1 sm:text-sm">
+              <label htmlFor="password" className="text-base font-medium sm:text-sm">
                 Password
               </label>
               <Input
@@ -214,22 +199,22 @@ function AuthScreen({ onAuthenticated, invitation }: { onAuthenticated: () => Pr
               />
             </div>
             {error && (
-              <p role="alert" className="text-pretty text-base/7 text-cat-red sm:text-sm/6">
+              <p role="alert" className="text-base/7 text-pretty text-danger sm:text-sm/6">
                 {error}
               </p>
             )}
             <Button type="submit" variant="primary" disabled={pending}>
-              {pending ? 'Please wait' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
-              {!pending && <ArrowRightIcon className="size-4 shrink-0 fill-current" />}
+              {pending ? 'Please wait…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+              {!pending && <ArrowRightIcon aria-hidden="true" />}
             </Button>
           </form>
 
-          {invitation && validated.isError && <p role="alert" className="text-sm text-cat-red">This invitation is unavailable. You can still sign in to your existing account.</p>}
-          {hasInvite || mode === 'sign-up' ? <p className="text-base/7 text-cat-subtext-0 sm:text-sm/6">
+          {invitation && validated.isError && <p role="alert" className="text-base/7 text-danger sm:text-sm/6">This invitation is unavailable. You can still sign in to your existing account.</p>}
+          {hasInvite || mode === 'sign-up' ? <p className="text-base/7 text-muted sm:text-sm/6">
             {mode === 'sign-in' ? 'New to Ronto?' : 'Already have an account?'}{' '}
             <button
               type="button"
-              className="font-medium text-cat-text underline decoration-cat-overlay-0 underline-offset-4 hover:decoration-cat-mauve focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cat-lavender"
+              className="rounded-sm font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               onClick={() => {
                 setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')
                 setError(null)
@@ -237,7 +222,7 @@ function AuthScreen({ onAuthenticated, invitation }: { onAuthenticated: () => Pr
             >
               {mode === 'sign-in' ? 'Create an account' : 'Sign in'}
             </button>
-          </p> : <p className="text-sm/6 text-cat-subtext-0">An invitation is required to create an account.</p>}
+          </p> : <p className="text-base/7 text-muted sm:text-sm/6">New to Ronto? Ask your family for a private invitation.</p>}
         </div>
       </section>
     </main>
@@ -320,20 +305,41 @@ function ConnectorsDialog({ familyId, onClose }: { familyId: FamilyId; onClose: 
     .map((cause) => cause instanceof Error ? cause.message : null)
     .find((message) => message !== null)
 
-  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-cat-crust/70 p-0 sm:items-center sm:p-6" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
-    <section role="dialog" aria-modal="true" aria-labelledby="connectors-title" className="flex max-h-[95dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-cat-mantle ring-1 ring-cat-surface-1 sm:max-h-[88dvh] sm:rounded-2xl">
-      <header className="flex items-start justify-between gap-4 border-b border-cat-surface-0 p-5 sm:p-6"><div><h2 id="connectors-title" className="text-xl font-semibold text-cat-text">Connected accounts</h2><p className="mt-1 text-sm/6 text-cat-subtext-0">Connect an account for your use only. Ronto never shares it with other family members.</p></div><Button autoFocus type="button" variant="ghost" size="icon" aria-label="Close connected accounts" onClick={onClose}><XMarkIcon className="size-4" /></Button></header>
-      <div className="overflow-y-auto p-5 sm:p-6">
-        <div className="flex flex-col gap-3">{connectors.data?.map((connection) => <div key={connection.id} className="rounded-xl bg-cat-base p-4 ring-1 ring-cat-surface-1"><div className="flex items-center justify-between gap-3"><div><p className="font-medium text-cat-text">{connectorName(connection.service)}</p><p className={cn('mt-1 text-xs font-medium', connection.status === 'active' ? 'text-cat-green' : connection.status === 'failed' ? 'text-cat-red' : 'text-cat-yellow')}>{connection.status === 'active' ? 'Connected' : connection.status === 'pending' ? 'Waiting for consent' : connection.status === 'disconnecting' ? 'Disconnecting' : 'Setup failed'}</p></div><div className="flex gap-2">{connection.status === 'pending' && <Button type="button" variant="outline" size="compact" disabled={pending} onClick={() => void checkConnection(connection)}>Check connection</Button>}<Button type="button" variant="ghost" size="compact" disabled={pending} onClick={() => void removeConnection(connection)}>Disconnect</Button></div></div></div>)}{connectors.isPending && <p className="text-sm text-cat-subtext-0">Loading connected accounts...</p>}{connectors.data?.length === 0 && <p className="text-sm text-cat-subtext-0">No accounts connected yet.</p>}</div>
-        <form className="mt-6 flex flex-col gap-4 border-t border-cat-surface-0 pt-6" onSubmit={connect}>
-          <div><label htmlFor="connector-provider" className="text-sm font-medium text-cat-subtext-1">Provider</label><select id="connector-provider" className="mt-2 min-h-11 w-full rounded-md bg-cat-base px-3 text-cat-text ring-1 ring-cat-surface-1 focus-visible:outline-2 focus-visible:outline-cat-lavender" value={selectedService} disabled={pending || providers.isPending} onChange={(event) => selectProvider(event.target.value)}><option value="">Choose a provider</option>{providers.data?.map(({ service }) => <option key={service} value={service}>{connectorName(service)}</option>)}</select></div>
-          <Button type="submit" variant="primary" className="min-h-11 self-start" disabled={pending || !provider || provider.scopes.length === 0}>Continue to provider consent</Button>
-        </form>
-        {notice && <p role="status" className="mt-4 text-sm text-cat-peach">{notice}</p>}
-        {(error ?? queryError) && <p role="alert" className="mt-4 text-sm text-cat-red">{error ?? queryError}</p>}
-      </div>
+  return <SettingsDialog title="Connected accounts" description="Give Ronto a hand with the services you use. These connections belong to you, not the whole family." onClose={onClose}>
+    <section className="flex min-w-0 flex-col gap-4" aria-labelledby="your-accounts-title">
+      <h3 id="your-accounts-title" className="text-sm font-medium">Your accounts</h3>
+      <ul role="list" className="flex flex-col divide-y divide-line">
+        {connectors.data?.map((connection) => <li key={connection.id} className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+          <div className="flex min-w-0 flex-col gap-1 text-sm">
+            <p className="font-medium">{connectorName(connection.service)}</p>
+            <p className={cn('flex items-center gap-1.5', connection.status === 'active' ? 'text-success' : connection.status === 'failed' ? 'text-danger' : 'text-warning')}>
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current" />
+              {connection.status === 'active' ? 'Connected' : connection.status === 'pending' ? 'Waiting for consent' : connection.status === 'disconnecting' ? 'Disconnecting' : 'Setup failed'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {connection.status === 'pending' && <Button variant="outline" size="compact" disabled={pending} onClick={() => void checkConnection(connection)}>Check connection</Button>}
+            <Button variant="ghost" size="compact" disabled={pending} onClick={() => void removeConnection(connection)}>Disconnect</Button>
+          </div>
+        </li>)}
+      </ul>
+      {connectors.isPending && <p role="status" className="text-sm/6 text-muted">Loading connected accounts…</p>}
+      {connectors.data?.length === 0 && <div className="flex flex-col gap-1 rounded-lg bg-soft p-4"><p className="text-sm font-medium">No accounts connected</p><p className="text-base/7 text-muted sm:text-sm/6">Choose a provider below to get started. You can disconnect at any time.</p></div>}
     </section>
-  </div>
+    <form className="flex flex-col gap-4 border-t border-line pt-5" onSubmit={connect}>
+      <div className="flex flex-col gap-1"><h3 className="text-sm font-medium">Add an account</h3><p className="text-base/7 text-muted sm:text-sm/6">You’ll review and approve access directly with the provider.</p></div>
+      <div className="flex flex-col gap-2">
+        <label htmlFor="connector-provider" className="text-sm font-medium">Provider</label>
+        <div className="relative">
+          <select id="connector-provider" name="provider" className="h-9 w-full appearance-none rounded-lg border border-line-strong bg-panel pl-3 pr-9 text-base text-ink outline-none focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-focus disabled:opacity-50 sm:text-sm pointer-coarse:min-h-11" value={selectedService} disabled={pending || providers.isPending} onChange={(event) => selectProvider(event.target.value)}><option value="">Choose a provider</option>{providers.data?.map(({ service }) => <option key={service} value={service}>{connectorName(service)}</option>)}</select>
+          <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-muted" />
+        </div>
+      </div>
+      <Button type="submit" variant="primary" className="self-start" disabled={pending || !provider || provider.scopes.length === 0}>{start.isPending ? 'Opening provider…' : 'Continue to provider'}<ArrowRightIcon aria-hidden="true" /></Button>
+    </form>
+    {notice && <p role="status" className="rounded-lg bg-soft p-3 text-sm/6 text-muted">{notice}</p>}
+    {(error ?? queryError) && <p role="alert" className="text-sm/6 text-danger">{error ?? queryError}</p>}
+  </SettingsDialog>
 }
 
 function FamilyDialog({ familyId, channels, onClose }: { familyId: FamilyId; channels: ReadonlyArray<ChannelDto>; onClose: () => void }) {
@@ -393,16 +399,41 @@ function FamilyDialog({ familyId, channels, onClose }: { familyId: FamilyId; cha
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-cat-crust/70 p-0 sm:items-center sm:p-6" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="family-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col gap-5 overflow-y-auto bg-cat-mantle p-5 ring-1 ring-cat-surface-1 sm:max-h-[85dvh] sm:p-6">
-        <div className="flex items-start justify-between gap-4"><div><h2 id="family-title" className="text-xl font-semibold text-cat-text">Manage family</h2><p className="text-sm text-cat-subtext-0">Invite people and choose which channels members can access.</p></div><Button autoFocus type="button" variant="ghost" size="icon" aria-label="Close family management" onClick={onClose}><XMarkIcon className="size-4" /></Button></div>
-        <div className="flex flex-wrap gap-2"><Button className="min-h-11" type="button" variant="secondary" disabled={pending} onClick={() => void createInvite('member')}><UserGroupIcon className="size-4" /> Create member link</Button><Button className="min-h-11" type="button" variant="secondary" disabled={pending} onClick={() => void createInvite('primary')}><UserGroupIcon className="size-4" /> Create primary link</Button></div>
-        {inviteLink && <div className="flex flex-col gap-2 rounded-xl bg-cat-surface-0 p-4 ring-1 ring-cat-surface-1"><label htmlFor="family-invite-link" className="text-sm font-medium text-cat-subtext-1">{inviteLink.role === 'primary' ? 'Primary' : 'Member'} invite, expires {inviteLink.expiresAt}</label><div className="flex flex-col gap-2 sm:flex-row"><Input id="family-invite-link" value={inviteLink.url} readOnly onFocus={(event) => event.currentTarget.select()} /><Button className="min-h-11 shrink-0" type="button" variant="outline" onClick={() => void copyInvite()}><ClipboardDocumentIcon className="size-4" /> Copy link</Button></div></div>}
-        {notice && <p role="status" className="text-sm text-cat-peach">{notice}</p>}
-        {(error ?? (membersQuery.error instanceof Error ? membersQuery.error.message : null)) && <p role="alert" className="text-sm text-cat-red">{error ?? (membersQuery.error instanceof Error ? membersQuery.error.message : 'Unable to load family members.')}</p>}
-        <div className="flex flex-col gap-3">{members.map((member) => { const primary = member.role === 'primary'; return <div key={member.id} className="rounded-xl bg-cat-surface-0 p-4 ring-1 ring-cat-surface-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium text-cat-text">{member.name}</p><p className="truncate text-sm text-cat-subtext-0">{member.email}</p></div><span className="shrink-0 text-xs uppercase tracking-wide text-cat-peach">{member.role}</span></div><div className="mt-3 flex flex-col gap-2"><p className="text-sm font-medium text-cat-subtext-1">Channel access</p>{channels.map((channel) => { const checked = channel.isDefault || member.channelIds.includes(channel.id); return primary ? <div key={channel.id} className="flex min-h-11 items-center gap-3 text-sm text-cat-subtext-0"><span className="size-1.5 rounded-full bg-cat-peach" />{channel.name}{channel.isDefault && <span className="text-xs text-cat-overlay-1">Always included</span>}</div> : <label key={channel.id} className="flex min-h-11 items-center gap-3 text-sm text-cat-subtext-0"><input type="checkbox" className="size-4 accent-cat-mauve" checked={checked} disabled={channel.isDefault || pending} onChange={(event) => void setAccess(channel.id, member, event.target.checked)} /><span>{channel.name}{channel.isDefault && <span className="ml-2 text-xs text-cat-overlay-1">Always included</span>}</span></label> })}</div></div> })}{membersQuery.isPending && <p className="text-sm text-cat-subtext-0">Loading family members...</p>}</div>
+    <SettingsDialog title="Manage family" description="Make room for your people, and choose which channels each member can access." onClose={onClose} className="max-w-3xl">
+      <section className="flex flex-col gap-4" aria-labelledby="invite-family-title">
+        <div className="flex flex-col gap-1"><h3 id="invite-family-title" className="text-sm font-medium">Invite someone</h3><p className="text-base/7 text-muted sm:text-sm/6">Send a private link to join this family. Primary members can also manage people and channel access.</p></div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={pending} onClick={() => void createInvite('member')}><UserGroupIcon aria-hidden="true" />Create member link</Button>
+          <Button variant="ghost" disabled={pending} onClick={() => void createInvite('primary')}>Create primary link</Button>
+        </div>
+        {inviteLink && <div className="flex min-w-0 flex-col gap-3 rounded-lg bg-soft p-4">
+          <div className="flex flex-col gap-1"><label htmlFor="family-invite-link" className="text-sm font-medium">{inviteLink.role === 'primary' ? 'Primary' : 'Member'} invitation</label><p className="text-sm text-muted">Expires {inviteLink.expiresAt}. Share this link privately.</p></div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row"><Input id="family-invite-link" name="familyInviteLink" value={inviteLink.url} readOnly onFocus={(event) => event.currentTarget.select()} /><Button variant="secondary" onClick={() => void copyInvite()}><ClipboardDocumentIcon aria-hidden="true" />Copy link</Button></div>
+        </div>}
       </section>
-    </div>
+      {notice && <p role="status" className="text-sm/6 text-muted">{notice}</p>}
+      {(error ?? (membersQuery.error instanceof Error ? membersQuery.error.message : null)) && <p role="alert" className="text-sm/6 text-danger">{error ?? (membersQuery.error instanceof Error ? membersQuery.error.message : 'Unable to load family members.')}</p>}
+      <section className="flex flex-col gap-5 border-t border-line pt-5" aria-labelledby="family-members-title">
+        <div className="flex items-center justify-between gap-3"><h3 id="family-members-title" className="text-sm font-medium">Family members</h3>{membersQuery.data && <p className="text-sm text-muted tabular-nums">{members.length} {members.length === 1 ? 'person' : 'people'}</p>}</div>
+        <ul role="list" className="flex min-w-0 flex-col divide-y divide-line">{members.map((member) => {
+          const primary = member.role === 'primary'
+          return <li key={member.id} className="flex min-w-0 flex-col gap-4 py-5 first:pt-0 last:pb-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-1 text-sm"><p className="break-words font-medium">{member.name}</p><p className="break-words text-muted">{member.email}</p></div>
+              <p className="shrink-0 rounded-md bg-soft px-2 py-1 text-sm text-muted capitalize">{member.role}</p>
+            </div>
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="pb-2 text-sm font-medium">Channel access</legend>
+              <div className="grid gap-x-6 sm:grid-cols-2">{channels.map((channel) => {
+                const checked = channel.isDefault || member.channelIds.includes(channel.id)
+                return primary ? <div key={channel.id} className="flex min-h-9 items-center gap-2.5 text-sm text-muted pointer-coarse:min-h-11"><CheckIcon aria-hidden="true" className="size-4 shrink-0 fill-faint" /><span className="min-w-0 break-words">{channel.name}</span>{channel.isDefault && <span className="shrink-0 text-faint">Always included</span>}</div> : <label key={channel.id} className="flex min-h-9 cursor-pointer items-center gap-2.5 text-sm text-muted pointer-coarse:min-h-11"><input name={`channel-access-${member.id}`} type="checkbox" className="size-4 shrink-0 rounded accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-default" checked={checked} disabled={channel.isDefault || pending} onChange={(event) => void setAccess(channel.id, member, event.target.checked)} /><span className="min-w-0 break-words">{channel.name}</span>{channel.isDefault && <span className="shrink-0 text-faint">Always included</span>}</label>
+              })}</div>
+            </fieldset>
+          </li>
+        })}</ul>
+        {membersQuery.isPending && <p role="status" className="text-sm/6 text-muted">Loading family members…</p>}
+      </section>
+    </SettingsDialog>
   )
 }
 
@@ -412,31 +443,31 @@ function WhatsappNumberStep({ status, numberLinked, whatsappAvailable }: {
   whatsappAvailable: boolean
 }) {
   return (
-    <li className={cn('rounded-2xl bg-cat-base p-4 ring-1 sm:p-5', numberLinked ? 'ring-cat-green/40' : 'ring-cat-surface-1')}>
+    <li className="whatsapp-step">
       <section aria-labelledby="whatsapp-step-number">
         <div className="flex items-start gap-3">
-          <span className={cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', numberLinked ? 'bg-cat-green text-cat-crust' : 'bg-cat-surface-1 text-cat-text')} aria-hidden="true">
+          <span className={cn('grid size-6 shrink-0 place-items-center rounded-full border text-sm tabular-nums', numberLinked ? 'border-success/30 text-success' : 'border-line-strong text-muted')} aria-hidden="true">
             {numberLinked ? <CheckIcon className="size-4" /> : '1'}
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <h3 id="whatsapp-step-number" className="font-semibold text-cat-text">Connect Ronto's number</h3>
-              {numberLinked && <span className="text-xs font-medium text-cat-green">Complete</span>}
+              <h3 id="whatsapp-step-number" className="text-sm font-medium">Connect Ronto’s number</h3>
+              {numberLinked && <p className="text-sm text-success">Complete</p>}
             </div>
-            <p className="mt-1 text-sm/6 text-cat-subtext-0">Use a dedicated WhatsApp number for Ronto, not a family member's personal account.</p>
+            <p className="text-base/7 text-muted sm:text-sm/6">Ronto uses a dedicated number, not a family member’s personal account.</p>
 
             {status === 'disabled' ? (
-              <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0">
-                <LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />
+              <div className="flex items-start gap-2 rounded-lg bg-soft p-3 text-sm/6 text-muted">
+                <LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />
                 WhatsApp is switched off on the Ronto server. It must be enabled before setup can continue.
               </div>
             ) : numberLinked ? (
-              <p className={cn('mt-4 rounded-xl p-3 text-sm/6', whatsappAvailable ? 'bg-cat-green/10 text-cat-green' : 'bg-cat-yellow/10 text-cat-yellow')}>
+              <p className={cn('text-sm/6', whatsappAvailable ? 'text-success' : 'text-warning')}>
                 {whatsappAvailable ? 'Ronto is connected and ready to receive messages.' : 'The number is linked. Wait for Ronto to finish reconnecting.'}
               </p>
             ) : (
-              <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0">
-                <LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />
+              <div className="flex items-start gap-2 rounded-lg bg-soft p-3 text-sm/6 text-muted">
+                <LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />
                 The platform administrator needs to connect Ronto's number in Platform administration first.
               </div>
             )}
@@ -460,22 +491,22 @@ function WhatsappIdentityStep({ identities, loading, identityLinked, numberLinke
   onRevoke: (identityId: string) => Promise<void>
 }) {
   return (
-    <li className={cn('rounded-2xl bg-cat-base p-4 ring-1 sm:p-5', identityLinked ? 'ring-cat-green/40' : 'ring-cat-surface-1')}>
+    <li className="whatsapp-step">
       <section aria-labelledby="whatsapp-step-identity">
         <div className="flex items-start gap-3">
-          <span className={cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', identityLinked ? 'bg-cat-green text-cat-crust' : numberLinked ? 'bg-cat-mauve text-cat-crust' : 'bg-cat-surface-1 text-cat-overlay-1')} aria-hidden="true">
+          <span className={cn('grid size-6 shrink-0 place-items-center rounded-full border text-sm tabular-nums', identityLinked ? 'border-success/30 text-success' : 'border-line-strong text-muted')} aria-hidden="true">
             {identityLinked ? <CheckIcon className="size-4" /> : '2'}
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <h3 id="whatsapp-step-identity" className="font-semibold text-cat-text">Link your WhatsApp</h3>
-              {identityLinked && <span className="text-xs font-medium text-cat-green">Complete</span>}
+              <h3 id="whatsapp-step-identity" className="text-sm font-medium">Link your WhatsApp</h3>
+              {identityLinked && <p className="text-sm text-success">Complete</p>}
             </div>
-            <p className="mt-1 text-sm/6 text-cat-subtext-0">This lets Ronto recognize your messages. Each family member completes this step once.</p>
+            <p className="text-base/7 text-muted sm:text-sm/6">Let Ronto recognize your messages. Each family member links their own number.</p>
 
-            {loading ? <p className="mt-4 text-sm text-cat-subtext-0">Checking linked identities...</p> : <div className="mt-4 flex flex-col gap-2">{identities?.map((identity) => <div key={identity.id} className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-cat-surface-0 px-3 ring-1 ring-cat-surface-1"><span className="flex min-w-0 items-center gap-2 text-sm text-cat-subtext-1"><CheckIcon className="size-4 shrink-0 fill-cat-green" /><span className="truncate">{identity.displayName ?? identity.externalUserId}</span></span><Button type="button" variant="ghost" size="compact" disabled={pending} onClick={() => void onRevoke(identity.id)}>Unlink</Button></div>)}</div>}
+            {loading ? <p role="status" className="text-sm/6 text-muted">Checking linked identities…</p> : <ul role="list" className="flex flex-col divide-y divide-line">{identities?.map((identity) => <li key={identity.id} className="flex min-h-9 items-center justify-between gap-3 py-1 text-sm"><div className="flex min-w-0 items-center gap-2"><CheckIcon aria-hidden="true" className="size-4 shrink-0 fill-success" /><span className="truncate">{identity.displayName ?? identity.externalUserId}</span></div><Button variant="ghost" size="compact" disabled={pending} onClick={() => void onRevoke(identity.id)}>Unlink</Button></li>)}</ul>}
 
-            {whatsappAvailable ? <div className="mt-4 flex flex-col gap-3"><Button type="button" variant={identityLinked ? 'outline' : 'primary'} className="min-h-11 self-start" disabled={pending} onClick={() => void onCreateCode()}>{identityLinked ? 'Link another number' : 'Create link command'}</Button>{identityCommand && <div className="flex flex-col gap-2 rounded-xl bg-cat-surface-0 p-4 ring-1 ring-cat-surface-1"><label htmlFor="whatsapp-identity-command" className="text-sm/6 font-medium text-cat-subtext-1">Send this command in a private message to Ronto within 15 minutes</label><div className="flex flex-col gap-2 sm:flex-row"><Input id="whatsapp-identity-command" value={identityCommand} readOnly onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="outline" className="min-h-11 shrink-0" onClick={() => void onCopy(identityCommand)}><ClipboardDocumentIcon className="size-4" /> Copy command</Button></div><p className="text-xs/5 text-cat-overlay-1">This screen updates automatically after Ronto confirms the command.</p></div>}</div> : !identityLinked && <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0"><LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />{numberLinked ? 'Wait for Ronto to reconnect before linking your identity.' : 'Complete step 1 before linking your identity.'}</div>}
+            {whatsappAvailable ? <div className="flex flex-col gap-3"><Button variant={identityLinked ? 'outline' : 'primary'} className="self-start" disabled={pending} onClick={() => void onCreateCode()}>{identityLinked ? 'Link another number' : 'Create link command'}</Button>{identityCommand && <div className="flex min-w-0 flex-col gap-3 rounded-lg bg-soft p-3"><label htmlFor="whatsapp-identity-command" className="text-sm/6 font-medium">Send this command privately to Ronto within 15 minutes.</label><Input id="whatsapp-identity-command" name="identityCommand" className="font-mono" value={identityCommand} readOnly onFocus={(event) => event.currentTarget.select()} /><Button variant="secondary" size="compact" className="self-start" onClick={() => void onCopy(identityCommand)}><ClipboardDocumentIcon aria-hidden="true" />Copy command</Button><p className="text-sm/6 text-muted">This screen updates automatically after Ronto confirms the command.</p></div>}</div> : !identityLinked && <div className="flex items-start gap-2 rounded-lg bg-soft p-3 text-sm/6 text-muted"><LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />{numberLinked ? 'Wait for Ronto to reconnect before linking your identity.' : 'Complete step 1 before linking your identity.'}</div>}
           </div>
         </div>
       </section>
@@ -495,14 +526,14 @@ function WhatsappDmFamilyStep({ familyId, families, loading, identityLinked, pen
   const current = families?.find((family) => family.familyId === familyId)
   const activeHere = selected?.familyId === familyId
   return (
-    <li className={cn('rounded-2xl bg-cat-base p-4 ring-1 sm:p-5', activeHere ? 'ring-cat-green/40' : 'ring-cat-surface-1')}>
+    <li className="whatsapp-step">
       <section aria-labelledby="whatsapp-step-dm-family">
         <div className="flex items-start gap-3">
-          <span className={cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', activeHere ? 'bg-cat-green text-cat-crust' : identityLinked ? 'bg-cat-mauve text-cat-crust' : 'bg-cat-surface-1 text-cat-overlay-1')} aria-hidden="true">{activeHere ? <CheckIcon className="size-4" /> : '3'}</span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h3 id="whatsapp-step-dm-family" className="font-semibold text-cat-text">Choose the family for WhatsApp DMs</h3>{activeHere && <span className="text-xs font-medium text-cat-green">Active here</span>}</div>
-            <p className="mt-1 text-sm/6 text-cat-subtext-0">Private WhatsApp messages use one family at a time. Group chats keep their own family session.</p>
-            {loading ? <p className="mt-4 text-sm text-cat-subtext-0">Checking the active DM family...</p> : identityLinked ? <div className="mt-4 flex flex-col gap-3 rounded-xl bg-cat-surface-0 p-3 ring-1 ring-cat-surface-1"><p className="text-sm text-cat-subtext-1">Current DM family: <span className="font-medium text-cat-text">{selected?.familyName ?? 'Not selected'}</span></p>{!activeHere && <Button type="button" variant="primary" className="min-h-11 self-start" disabled={pending || current === undefined} onClick={() => void onSelect()}>Use {current?.familyName ?? 'this family'} for DMs</Button>}<p className="text-xs/5 text-cat-overlay-1">In WhatsApp, use <code>/ronto families</code> or <code>/ronto family &lt;code&gt;</code> to switch without opening the web app.</p></div> : <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0"><LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />Link your WhatsApp identity first.</div>}
+          <span className={cn('grid size-6 shrink-0 place-items-center rounded-full border text-sm tabular-nums', activeHere ? 'border-success/30 text-success' : 'border-line-strong text-muted')} aria-hidden="true">{activeHere ? <CheckIcon className="size-4" /> : '3'}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h3 id="whatsapp-step-dm-family" className="text-sm font-medium">Choose a family for direct messages</h3>{activeHere && <p className="text-sm text-success">Active here</p>}</div>
+            <p className="text-base/7 text-muted sm:text-sm/6">Private WhatsApp messages use one family at a time. Group chats keep their own family session.</p>
+            {loading ? <p role="status" className="text-sm/6 text-muted">Checking the active family…</p> : identityLinked ? <div className="flex flex-col gap-3"><p className="text-sm text-muted">Current family: <span className="font-medium text-ink">{selected?.familyName ?? 'Not selected'}</span></p>{!activeHere && <Button variant="primary" className="self-start whitespace-normal text-left" disabled={pending || current === undefined} onClick={() => void onSelect()}>Use {current?.familyName ?? 'this family'} for DMs</Button>}<p className="text-sm/6 text-muted">In WhatsApp, use <code className="rounded bg-soft px-1 font-mono">/ronto families</code> or <code className="rounded bg-soft px-1 font-mono">/ronto family &lt;code&gt;</code> to switch families.</p></div> : <div className="flex items-start gap-2 rounded-lg bg-soft p-3 text-sm/6 text-muted"><LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />Link your WhatsApp identity first.</div>}
           </div>
         </div>
       </section>
@@ -525,23 +556,23 @@ function WhatsappChatStep({ conversationId, isPrimary, bindings, loading, chatLi
   onRemove: (bindingId: string) => Promise<void>
 }) {
   return (
-    <li className={cn('rounded-2xl bg-cat-base p-4 ring-1 sm:p-5', chatLinked ? 'ring-cat-green/40' : 'ring-cat-surface-1')}>
+    <li className="whatsapp-step">
       <section aria-labelledby="whatsapp-step-chat">
         <div className="flex items-start gap-3">
-          <span className={cn('grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold', chatLinked ? 'bg-cat-green text-cat-crust' : whatsappAvailable && identityLinked && isPrimary ? 'bg-cat-mauve text-cat-crust' : 'bg-cat-surface-1 text-cat-overlay-1')} aria-hidden="true">
+          <span className={cn('grid size-6 shrink-0 place-items-center rounded-full border text-sm tabular-nums', chatLinked ? 'border-success/30 text-success' : 'border-line-strong text-muted')} aria-hidden="true">
             {chatLinked ? <CheckIcon className="size-4" /> : '4'}
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <h3 id="whatsapp-step-chat" className="font-semibold text-cat-text">Use Ronto in a WhatsApp group</h3>
-              {chatLinked ? <span className="text-xs font-medium text-cat-green">Complete</span> : !isPrimary && <span className="text-xs font-medium text-cat-overlay-1">Primary only</span>}
+              <h3 id="whatsapp-step-chat" className="text-sm font-medium">Bring Ronto into a group</h3>
+              {chatLinked ? <p className="text-sm text-success">Complete</p> : !isPrimary && <p className="text-sm text-muted">Primary members only</p>}
             </div>
-            <p className="mt-1 text-sm/6 text-cat-subtext-0">Create the group, add Ronto, then mention Ronto. The channel is created and linked automatically.</p>
-            <p className="mt-2 text-xs/5 text-cat-overlay-1">Everyone in a connected group can invoke Ronto with this session's context, files, and channel tools. Connect only groups whose current and future participants you trust.</p>
+            <p className="text-base/7 text-muted sm:text-sm/6">Create the group, add Ronto, then mention Ronto. The channel is created and linked automatically.</p>
+            <p className="rounded-lg bg-soft p-3 text-sm/6 text-muted">Everyone in a connected group can invoke Ronto with this session’s context, files, and channel tools. Connect only groups whose current and future participants you trust.</p>
 
-            {isPrimary && loading && conversationId !== null ? <p className="mt-4 text-sm text-cat-subtext-0">Checking connected chats...</p> : <div className="mt-4 flex flex-col gap-2">{bindings?.map((binding) => <div key={binding.id} className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-cat-surface-0 px-3 ring-1 ring-cat-surface-1"><span className="min-w-0"><span className="block text-sm font-medium text-cat-subtext-1">Connected WhatsApp chat</span><span className="block truncate font-mono text-xs text-cat-overlay-1">{binding.externalChannelId}</span></span><Button type="button" variant="ghost" size="compact" disabled={pending} onClick={() => void onRemove(binding.id)}>Remove</Button></div>)}</div>}
+            {isPrimary && loading && conversationId !== null ? <p role="status" className="text-sm/6 text-muted">Checking connected chats…</p> : <ul role="list" className="flex flex-col divide-y divide-line">{bindings?.map((binding) => <li key={binding.id} className="flex min-h-9 items-center justify-between gap-3 py-2 text-sm"><div className="flex min-w-0 flex-col gap-1"><p className="font-medium">Connected WhatsApp chat</p><p className="truncate font-mono text-muted">{binding.externalChannelId}</p></div><Button variant="ghost" size="compact" disabled={pending} onClick={() => void onRemove(binding.id)}>Remove</Button></li>)}</ul>}
 
-            {!isPrimary ? <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0"><LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />A linked primary family member must mention Ronto to create the channel.</div> : conversationId === null ? null : whatsappAvailable && identityLinked ? <div className="mt-4 flex flex-col gap-3"><Button type="button" variant="outline" className="min-h-11 self-start" disabled={pending} onClick={() => void onCreateCode()}>Link this existing session instead</Button>{bindingCommand && <div className="flex flex-col gap-2 rounded-xl bg-cat-surface-0 p-4 ring-1 ring-cat-surface-1"><label htmlFor="whatsapp-binding-command" className="text-sm/6 font-medium text-cat-subtext-1">Post this command in the WhatsApp chat within 15 minutes</label><div className="flex flex-col gap-2 sm:flex-row"><Input id="whatsapp-binding-command" value={bindingCommand} readOnly onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="outline" className="min-h-11 shrink-0" onClick={() => void onCopy(bindingCommand)}><ClipboardDocumentIcon className="size-4" /> Copy command</Button></div><p className="text-xs/5 text-cat-overlay-1">Everyone in that chat will use the selected Ronto session.</p></div>}</div> : !chatLinked && <div className="mt-4 flex items-start gap-2 rounded-xl bg-cat-surface-0 p-3 text-sm/6 text-cat-subtext-0"><LockClosedIcon className="mt-1 size-4 shrink-0 fill-cat-overlay-1" />{!identityLinked ? 'Complete step 2 before using Ronto in a group.' : 'Wait for Ronto to reconnect before using it in a group.'}</div>}
+            {!isPrimary ? <div className="flex items-start gap-2 text-sm/6 text-muted"><LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />A linked primary family member must mention Ronto to create the channel.</div> : conversationId === null ? null : whatsappAvailable && identityLinked ? <div className="flex flex-col gap-3"><Button variant="outline" className="self-start whitespace-normal text-left" disabled={pending} onClick={() => void onCreateCode()}>Link this existing session instead</Button>{bindingCommand && <div className="flex min-w-0 flex-col gap-3 rounded-lg bg-soft p-3"><label htmlFor="whatsapp-binding-command" className="text-sm/6 font-medium">Post this command in the WhatsApp chat within 15 minutes.</label><Input id="whatsapp-binding-command" name="bindingCommand" className="font-mono" value={bindingCommand} readOnly onFocus={(event) => event.currentTarget.select()} /><Button variant="secondary" size="compact" className="self-start" onClick={() => void onCopy(bindingCommand)}><ClipboardDocumentIcon aria-hidden="true" />Copy command</Button><p className="text-sm/6 text-muted">Everyone in that chat will use the selected Ronto session.</p></div>}</div> : !chatLinked && <div className="flex items-start gap-2 text-sm/6 text-muted"><LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0 fill-faint" />{!identityLinked ? 'Complete step 2 before using Ronto in a group.' : 'Wait for Ronto to reconnect before using it in a group.'}</div>}
           </div>
         </div>
       </section>
@@ -587,9 +618,9 @@ function WhatsappDialog({ familyId, conversationId, isPrimary, onClose }: {
     : status === 'logged_out' ? 'Needs pairing'
     : status === 'disabled' ? 'Unavailable'
     : 'Checking'
-  const statusColor = status === 'connected' ? 'bg-cat-green'
-    : status === 'disabled' || status === 'logged_out' ? 'bg-cat-red'
-    : 'bg-cat-yellow'
+  const statusColor = status === 'connected' ? 'bg-success'
+    : status === 'disabled' || status === 'logged_out' ? 'bg-danger'
+    : 'bg-warning'
 
   async function copy(value: string) {
     try {
@@ -655,42 +686,24 @@ function WhatsappDialog({ familyId, conversationId, isPrimary, onClose }: {
   const dialogError = error ?? queryError
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-cat-crust/70 p-0 sm:items-center sm:p-6" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="whatsapp-title" aria-describedby="whatsapp-description" className="flex max-h-[95dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-cat-mantle ring-1 ring-cat-surface-1 sm:max-h-[88dvh] sm:rounded-2xl">
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-cat-surface-0 p-5 sm:p-6">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-3">
-              <h2 id="whatsapp-title" className="text-xl font-semibold tracking-tight text-cat-text">Set up WhatsApp</h2>
-              <span className="inline-flex items-center gap-2 rounded-full bg-cat-surface-0 px-2.5 py-1 text-xs font-medium text-cat-subtext-1 ring-1 ring-cat-surface-1" role="status">
-                <span className={cn('size-2 rounded-full', statusColor)} aria-hidden="true" />
-                {statusLabel}
-              </span>
-            </div>
-            <p id="whatsapp-description" className="max-w-[55ch] text-sm/6 text-cat-subtext-0">
-              Complete these steps in order. Ronto only reads chats you connect to a session.
-            </p>
-          </div>
-          <Button autoFocus type="button" variant="ghost" size="icon" className="shrink-0" aria-label="Close WhatsApp settings" onClick={onClose}><XMarkIcon className="size-4" /></Button>
-        </header>
-
-        <div className="overflow-y-auto p-5 sm:p-6">
-          <div className="mb-5 flex items-center justify-between gap-4 text-sm">
-            <p className="font-medium text-cat-subtext-1">Setup progress</p>
-            <p className="tabular-nums text-cat-subtext-0">{completedSteps} of {totalSteps} complete</p>
-          </div>
-
-          <ol className="flex flex-col gap-4">
+    <SettingsDialog title="WhatsApp" description="Keep the conversation going from WhatsApp. Complete these steps in order to connect your number and chats." onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <p role="status" className="flex items-center gap-2 text-muted"><span className={cn('size-1.5 shrink-0 rounded-full', statusColor)} aria-hidden="true" />{statusLabel}</p>
+          <p className="text-muted tabular-nums">{completedSteps} of {totalSteps} complete</p>
+        </div>
+        <progress aria-label="WhatsApp setup progress" className="h-1.5 w-full overflow-hidden rounded-full accent-primary" value={completedSteps} max={totalSteps} />
+      </div>
+          <ol role="list" aria-label="WhatsApp setup steps" className="flex flex-col">
             <WhatsappNumberStep status={status} numberLinked={numberLinked} whatsappAvailable={whatsappAvailable} />
             <WhatsappIdentityStep identities={identities.data} loading={identities.isPending} identityLinked={identityLinked} numberLinked={numberLinked} whatsappAvailable={whatsappAvailable} pending={pending} identityCommand={identityCommand} onCreateCode={createIdentityCode} onCopy={copy} onRevoke={unlinkIdentity} />
             <WhatsappDmFamilyStep familyId={familyId} families={dmFamilies.data} loading={dmFamilies.isPending} identityLinked={identityLinked} pending={pending} onSelect={chooseDmFamily} />
             <WhatsappChatStep conversationId={conversationId} isPrimary={isPrimary} bindings={bindings.data} loading={bindings.isPending} chatLinked={chatLinked} identityLinked={identityLinked} whatsappAvailable={whatsappAvailable} pending={pending} bindingCommand={bindingCommand} onCreateCode={createBindingCode} onCopy={copy} onRemove={disconnectChat} />
           </ol>
 
-          {notice && <p role="status" className="mt-4 text-sm text-cat-peach">{notice}</p>}
-          {dialogError && <p role="alert" className="mt-4 text-sm text-cat-red">{dialogError}</p>}
-        </div>
-      </section>
-    </div>
+      {notice && <p role="status" className="rounded-lg bg-soft p-3 text-sm/6 text-muted">{notice}</p>}
+      {dialogError && <p role="alert" className="text-sm/6 text-danger">{dialogError}</p>}
+    </SettingsDialog>
   )
 }
 
@@ -704,169 +717,40 @@ function OnboardingScreen({ user, onComplete }: { user: MeDto['user']; onComplet
   }
 
   return (
-    <main className="isolate flex min-h-dvh items-center justify-center bg-cat-crust p-6">
-      <section className="flex w-full max-w-lg flex-col gap-10 bg-cat-mantle p-7 ring-1 ring-cat-surface-1 sm:p-10">
-        <Brand />
+    <main className="isolate flex min-h-dvh flex-col bg-canvas px-6 py-6 text-ink sm:px-10 sm:py-10">
+      <header className="mx-auto w-full max-w-5xl"><Brand /></header>
+      <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-7 py-12 sm:py-20">
         <div className="flex flex-col gap-3">
-          <p className="font-mono text-sm tracking-wide text-cat-peach">ONE LAST DETAIL</p>
-          <h1 className="text-balance text-3xl font-semibold tracking-tight text-cat-text">
-            What does your family call itself?
+          <h1 className="max-w-[20ch] text-3xl font-medium tracking-tight text-balance">
+            Make a little space for your family.
           </h1>
-          <p className="max-w-[52ch] text-pretty text-base/7 text-cat-subtext-0 sm:text-sm/6">
-            This names your private shared space. You are setting it up as the primary member, {user.name}.
+          <p className="text-base/7 text-pretty text-muted sm:text-sm/6">
+            Start with a name for your private workspace. You’ll be its primary member, {user.name}.
           </p>
         </div>
-        <form className="flex max-w-xs flex-col gap-5" onSubmit={submit}>
+        <form className="flex flex-col gap-5" onSubmit={submit}>
           <div className="flex flex-col gap-2">
-            <label htmlFor="familyName" className="text-base font-medium text-cat-subtext-1 sm:text-sm">
+            <label htmlFor="familyName" className="text-sm font-medium">
               Family name
             </label>
             <Input
               id="familyName"
               name="familyName"
-              placeholder="The Rao family"
-              autoFocus
+              placeholder="Your family name"
+              aria-describedby="family-name-help"
               required
             />
+            <p id="family-name-help" className="text-sm/6 text-muted">Pick a name everyone will recognize.</p>
           </div>
-          {onboarding.error && <p role="alert" className="text-base/7 text-cat-red sm:text-sm/6">{onboarding.error instanceof Error ? onboarding.error.message : 'Unable to create your family space.'}</p>}
+          {onboarding.error && <p role="alert" className="text-base/7 text-danger sm:text-sm/6">{onboarding.error instanceof Error ? onboarding.error.message : 'Unable to create your family space.'}</p>}
           <Button type="submit" variant="primary" disabled={onboarding.isPending}>
-            {onboarding.isPending ? 'Creating space' : 'Continue to Ronto'}
-            {!onboarding.isPending && <ArrowRightIcon className="size-4 shrink-0 fill-current" />}
+            {onboarding.isPending ? 'Creating your space…' : 'Create family space'}
+            {!onboarding.isPending && <ArrowRightIcon aria-hidden="true" />}
           </Button>
         </form>
+        <p className="flex items-start gap-2 border-t border-line pt-5 text-sm/6 text-muted"><LockClosedIcon aria-hidden="true" className="h-lh w-4 shrink-0" />Only the people you invite can join your family.</p>
       </section>
     </main>
-  )
-}
-
-function conversationTitle(conversation: ConversationDto) {
-  return conversation.title ?? 'Untitled conversation'
-}
-
-function Sidebar({ channels, conversations, selectedChannelId, selectedId, workingConversationId, userName, isPrimary, mobileOpen, onClose, onSelectChannel, onSelect, onDelete, onCreateChannel, onCreate, onSignOut, onManageFamily, onManageWhatsapp, onManageConnectors, manageButtonRef, whatsappButtonRef, connectorsButtonRef }: {
-  channels: ReadonlyArray<ChannelDto>; conversations: ReadonlyArray<ConversationDto>; selectedChannelId: ChannelId | null; selectedId: ConversationId | null; userName: string; isPrimary: boolean; mobileOpen: boolean; onClose: () => void
-  workingConversationId: ConversationId | null
-  onSelectChannel: (id: ChannelId) => void; onSelect: (id: ConversationId) => void; onDelete: (id: ConversationId) => Promise<void>; onCreateChannel: (name: string, purpose: string) => Promise<void>; onCreate: () => Promise<void>; onSignOut: () => Promise<void>; onManageFamily: () => void; onManageWhatsapp: () => void; onManageConnectors: () => void; manageButtonRef: RefObject<HTMLButtonElement | null>; whatsappButtonRef: RefObject<HTMLButtonElement | null>; connectorsButtonRef: RefObject<HTMLButtonElement | null>
-}) {
-  const [creatingChannel, setCreatingChannel] = useState(false)
-  const [pending, setPending] = useState(false)
-  const [deletingId, setDeletingId] = useState<ConversationId | null>(null)
-
-  async function create() {
-    setPending(true)
-    try { await onCreate() } catch { /* The parent displays the request error. */ } finally { setPending(false) }
-  }
-  async function createChannel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setPending(true)
-    try { await onCreateChannel(String(form.get('name') ?? ''), String(form.get('purpose') ?? '')); setCreatingChannel(false) } catch { /* The parent displays the request error. */ } finally { setPending(false) }
-  }
-  async function remove(conversation: ConversationDto) {
-    if (!window.confirm(`Delete "${conversationTitle(conversation)}"? This cannot be undone.`)) return
-    setDeletingId(conversation.id)
-    try { await onDelete(conversation.id) } catch { /* The parent displays the request error. */ } finally { setDeletingId(null) }
-  }
-
-  return (
-    <>
-      {mobileOpen && (
-        <button
-          type="button"
-           aria-label="Close navigation"
-          className="fixed inset-0 z-30 cursor-default bg-cat-crust/70 lg:hidden"
-          onClick={onClose}
-        />
-      )}
-      <aside
-        role={mobileOpen ? 'dialog' : undefined}
-           aria-label={mobileOpen ? 'Channel and session navigation' : undefined}
-        aria-modal={mobileOpen ? true : undefined}
-        className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-[min(21rem,88vw)] flex-col bg-cat-mantle ring-1 ring-cat-surface-1 lg:static lg:z-auto lg:w-80 lg:translate-x-0 lg:ring-0',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex h-16 shrink-0 items-center justify-between p-4 sm:px-5">
-          <Brand />
-          <Button autoFocus={mobileOpen} type="button" variant="ghost" size="icon" className="lg:hidden" aria-label="Close navigation" onClick={onClose}>
-            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-            <XMarkIcon className="size-4 shrink-0 fill-current" />
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-          <p className="text-base font-medium text-cat-subtext-0 sm:text-sm">Channels</p>
-          <Button type="button" variant="ghost" size="compact" className="pr-2 pl-1.5" onClick={() => setCreatingChannel(true)}><PlusIcon className="size-4 shrink-0 fill-current" /> New</Button>
-        </div>
-        {creatingChannel && <form className="flex flex-col gap-2 px-4 pb-3 sm:px-5" onSubmit={createChannel}>
-          <Input name="name" aria-label="Channel name" placeholder="Channel name" autoFocus required /><Input name="purpose" aria-label="Channel purpose (optional)" placeholder="Purpose (optional)" />
-          <Button type="submit" size="compact" disabled={pending}>Create channel</Button>
-        </form>}
-        <nav className="max-h-[38%] overflow-y-auto px-2" aria-label="Channels"><ul className="flex flex-col gap-1" role="list">{channels.map((channel) => <li key={channel.id}><button type="button" aria-current={selectedChannelId === channel.id ? 'page' : undefined} className={cn('w-full rounded-lg px-3 py-2.5 text-left text-base text-cat-subtext-0 hover:bg-cat-surface-0 hover:text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender sm:py-2 sm:text-sm', selectedChannelId === channel.id && 'bg-cat-surface-0 text-cat-text')} onClick={() => onSelectChannel(channel.id)}>{channel.name}</button></li>)}</ul></nav>
-        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-          <p className="text-base font-medium text-cat-subtext-0 sm:text-sm">Sessions</p>
-          <Button type="button" variant="ghost" size="compact" className="pr-2 pl-1.5" onClick={() => void create()} disabled={selectedChannelId === null || pending}>
-            <PlusIcon className="size-4 shrink-0 fill-current" />
-            New
-          </Button>
-        </div>
-
-        <nav className="min-h-0 flex-1 overflow-y-auto px-2" aria-label="Sessions">
-          {conversations.length === 0 ? (
-            <div className="flex flex-col gap-2 px-3 py-8">
-              <p className="text-base font-medium text-cat-subtext-1 sm:text-sm">No sessions yet</p>
-              <p className="text-pretty text-base/7 text-cat-subtext-0 sm:text-sm/6">Create a session to begin.</p>
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-1" role="list">
-              {conversations.map((conversation) => {
-                const working = conversation.id === workingConversationId
-                return <li key={conversation.id} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    aria-current={selectedId === conversation.id ? 'page' : undefined}
-                    className={cn(
-                      'min-w-0 flex-1 rounded-lg px-3 py-2.5 text-left text-base text-cat-subtext-0 hover:bg-cat-surface-0 hover:text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender sm:py-2 sm:text-sm',
-                      selectedId === conversation.id && 'bg-cat-surface-0 text-cat-text',
-                    )}
-                    onClick={() => onSelect(conversation.id)}
-                  >
-                    <span className="line-clamp-1">{conversationTitle(conversation)}</span>
-                  </button>
-                  {working ? <span role="status" className="grid size-10 shrink-0 place-items-center" aria-label="Generating response">
-                    <span className="size-4 animate-spin rounded-full border-2 border-cat-surface-2 border-t-cat-mauve motion-reduce:animate-pulse" aria-hidden="true" />
-                  </span> : <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-cat-subtext-0 hover:text-cat-red"
-                    aria-label={`Delete ${conversationTitle(conversation)}`}
-                    disabled={deletingId !== null}
-                    onClick={() => void remove(conversation)}
-                  >
-                    <TrashIcon className="size-4 shrink-0 fill-current" />
-                  </Button>}
-                </li>
-              })}
-            </ul>
-          )}
-        </nav>
-
-         <div className="flex items-center gap-3 border-t border-cat-surface-0 p-4 sm:px-5">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-cat-surface-0 text-sm font-medium text-cat-peach">
-            {userName.slice(0, 1).toUpperCase()}
-          </div>
-            <p className="min-w-0 flex-1 truncate text-base font-medium text-cat-text sm:text-sm">{userName}</p>
-            <Button ref={connectorsButtonRef} type="button" variant="ghost" size="icon" aria-label="Manage connected accounts" onClick={onManageConnectors}><WrenchScrewdriverIcon className="size-4 shrink-0 fill-current" /></Button>
-            <Button ref={whatsappButtonRef} type="button" variant="ghost" size="icon" aria-label="Manage WhatsApp" onClick={onManageWhatsapp}><ChatBubbleLeftRightIcon className="size-4 shrink-0 fill-current" /></Button>
-            {isPrimary && <Button ref={manageButtonRef} type="button" variant="ghost" size="icon" aria-label="Manage family" onClick={onManageFamily}><UserGroupIcon className="size-4 shrink-0 fill-current" /></Button>}
-          <Button type="button" variant="ghost" size="icon" aria-label="Sign out" onClick={onSignOut}>
-            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-            <ArrowRightStartOnRectangleIcon className="size-4 shrink-0 fill-current" />
-          </Button>
-        </div>
-      </aside>
-    </>
   )
 }
 
@@ -893,16 +777,16 @@ function formatDuration(durationMs: number) {
   return `Worked for ${minutes}m ${seconds % 60}s`
 }
 
-function toolLabel(name: string) {
+function toolLabel(name: string, running = false) {
   switch (name) {
-    case 'bash': return 'Ran a command'
-    case 'edit': return 'Edited a file'
+    case 'bash': return running ? 'Running a command' : 'Ran a command'
+    case 'edit': return running ? 'Editing a file' : 'Edited a file'
     case 'glob':
-    case 'grep': return 'Searched files'
-    case 'ls': return 'Listed files'
-    case 'read': return 'Read a file'
-    case 'write': return 'Wrote a file'
-    default: return `Used ${name}`
+    case 'grep': return running ? 'Searching files' : 'Searched files'
+    case 'ls': return running ? 'Listing files' : 'Listed files'
+    case 'read': return running ? 'Reading a file' : 'Read a file'
+    case 'write': return running ? 'Writing a file' : 'Wrote a file'
+    default: return `${running ? 'Using' : 'Used'} ${name}`
   }
 }
 
@@ -933,7 +817,7 @@ function WorkDisclosureContent({ activity }: { activity: ReadonlyArray<WorkActiv
           <details key={`${block.toolCallId}-${index}`} className="group/tool">
             <summary className="flex min-h-11 list-none items-center gap-2 rounded-lg outline-none hover:text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender [&::-webkit-details-marker]:hidden">
               <WrenchScrewdriverIcon className={cn('size-4 shrink-0', block.isError ? 'fill-cat-red' : block.running ? 'animate-pulse fill-cat-mauve' : 'fill-cat-overlay-1')} />
-              <span>{toolLabel(block.name)}{block.running && '…'}</span>
+              <span>{toolLabel(block.name, block.running)}{block.running && '…'}</span>
               <ChevronRightIcon className="ml-auto size-4 fill-current transition-transform duration-150 group-open/tool:rotate-90 motion-reduce:transition-none" />
             </summary>
             <div className="ml-6 grid gap-3 border-l border-cat-surface-1 py-2 pl-4">
@@ -966,7 +850,7 @@ function WorkDisclosure({ message }: { message: MessageDto }) {
     </div>
   )
   return (
-    <details className="group/work">
+    <details className="work-disclosure group/work">
       <summary className="flex min-h-11 list-none items-center gap-1.5 rounded-lg text-xs text-cat-overlay-1 outline-none hover:text-cat-subtext-0 focus-visible:outline-2 focus-visible:outline-cat-lavender [&::-webkit-details-marker]:hidden">
         <span className="tabular-nums">{formatDuration(work.durationMs)}</span>
         <ChevronRightIcon className="size-4 fill-current transition-transform duration-150 group-open/work:rotate-90 motion-reduce:transition-none" />
@@ -977,6 +861,7 @@ function WorkDisclosure({ message }: { message: MessageDto }) {
 }
 
 function PendingWorkDisclosure({ activity }: { activity: ReadonlyArray<WorkActivity> }) {
+  const latest = activity.at(-1)
   if (activity.length === 0) return (
     <div className="flex min-h-11 items-center gap-2 text-xs text-cat-subtext-0" role="status">
       <span className="size-3 animate-spin rounded-full border-2 border-cat-surface-2 border-t-cat-mauve motion-reduce:animate-pulse" aria-hidden="true" />
@@ -984,9 +869,10 @@ function PendingWorkDisclosure({ activity }: { activity: ReadonlyArray<WorkActiv
     </div>
   )
   return (
-    <details className="group/work" open={activity.length > 0}>
+    <details className="work-disclosure group/work">
       <summary className="flex min-h-11 list-none items-center gap-1.5 rounded-lg text-xs text-cat-subtext-0 outline-none hover:text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender [&::-webkit-details-marker]:hidden">
-        <span>Activity</span>
+        <span className="working-dot" aria-hidden="true" />
+        <span role="status">{latest?.type === 'tool' ? toolLabel(latest.name, latest.running) : 'Thinking'}…</span>
         <ChevronRightIcon className="size-4 fill-current transition-transform duration-150 group-open/work:rotate-90 motion-reduce:transition-none" />
       </summary>
       <WorkDisclosureContent activity={activity} />
@@ -996,7 +882,7 @@ function PendingWorkDisclosure({ activity }: { activity: ReadonlyArray<WorkActiv
 
 function FileLink({ familyId, file }: { familyId: FamilyId; file: ChannelFile }) {
   return (
-    <div className="flex min-h-11 items-stretch rounded-xl bg-cat-mantle text-xs text-cat-text ring-1 ring-cat-surface-1">
+    <div className="flex min-h-11 items-stretch rounded-xl bg-panel text-base text-ink ring-1 ring-line sm:text-sm">
       <a
         href={`/api/families/${familyId}/files/${file.id}/view`}
         target="_blank"
@@ -1039,24 +925,24 @@ function ApprovalCard({ familyId, block }: {
     onError: (cause) => setError(cause instanceof Error ? cause.message : 'Unable to update this approval.'),
   })
   return (
-    <section className="flex max-w-xl flex-col gap-3 rounded-xl border border-cat-surface-1 bg-cat-mantle p-4" aria-label="Connector approval">
+    <section className="flex max-w-xl flex-col gap-4 rounded-xl border border-line-strong bg-panel p-5" aria-label="Connector approval">
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold text-cat-text">{block.title}</h3>
-        <p className="whitespace-pre-wrap text-xs/5 text-cat-subtext-0">{block.description}</p>
+        <h3 className="text-base font-semibold text-ink sm:text-sm">{block.title}</h3>
+        <p className="whitespace-pre-wrap text-base/7 text-muted sm:text-sm/6">{block.description}</p>
       </div>
       {status === 'pending' ? (
         <div className="flex gap-2">
-          <Button type="button" variant="primary" className="min-h-11" disabled={decide.isPending} onClick={() => decide.mutate('approved')}>
+          <Button type="button" variant="secondary" disabled={decide.isPending} onClick={() => decide.mutate('approved')}>
             Approve
           </Button>
-          <Button type="button" variant="ghost" className="min-h-11" disabled={decide.isPending} onClick={() => decide.mutate('rejected')}>
+          <Button type="button" variant="ghost" disabled={decide.isPending} onClick={() => decide.mutate('rejected')}>
             Cancel
           </Button>
         </div>
       ) : (
-        <p className="text-xs font-medium text-cat-subtext-0">{status === 'succeeded' ? 'Completed' : status === 'rejected' ? 'Cancelled' : status === 'expired' ? 'Expired' : status === 'failed' ? 'Failed' : status === 'outcome_unknown' ? 'Outcome unknown — Ronto will not retry automatically' : 'Approved'}</p>
+        <p className="text-sm font-medium text-muted">{status === 'succeeded' ? 'Completed' : status === 'rejected' ? 'Cancelled' : status === 'expired' ? 'Expired' : status === 'failed' ? 'Failed' : status === 'outcome_unknown' ? 'Outcome unknown — Ronto will not retry automatically' : 'Approved'}</p>
       )}
-      {error && <p role="alert" className="text-xs text-cat-red">{error}</p>}
+      {error && <p role="alert" className="text-base text-danger sm:text-sm">{error}</p>}
     </section>
   )
 }
@@ -1076,6 +962,23 @@ function speakerIdentity(id: string | null | undefined, label: string | null | u
   for (const character of id ?? name)
     colorIndex = (colorIndex + character.charCodeAt(0)) % memberNameColors.length
   return { name, color: memberNameColors[colorIndex] }
+}
+
+function CopyMessage({ text }: { text: string }) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); setStatus('copied') }
+    catch { setStatus('failed') }
+  }
+  useEffect(() => {
+    if (status === 'idle') return
+    const timeout = window.setTimeout(() => setStatus('idle'), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [status])
+  return <>
+    <Button type="button" variant="ghost" size="icon" className="copy-message" aria-label={status === 'copied' ? 'Response copied' : 'Copy response'} title={status === 'copied' ? 'Copied' : 'Copy response'} onClick={() => void copy()}>{status === 'copied' ? <CheckIcon className="size-4 shrink-0 fill-current" /> : <ClipboardDocumentIcon className="size-4 shrink-0 fill-current" />}</Button>
+    <span role="status" className="sr-only">{status === 'copied' ? 'Response copied.' : status === 'failed' ? 'Clipboard unavailable. Select the response to copy it.' : ''}</span>
+  </>
 }
 
 function Message({
@@ -1106,13 +1009,13 @@ function Message({
     minute: '2-digit',
   })
   if (!fromMember) return (
-    <li className="flex justify-start">
-      <article className="flex w-full flex-col gap-2">
+    <li>
+      <article className="chat-message message-agent">
         <WorkDisclosure message={message} />
         {text && <RenderMarkdown>{text}</RenderMarkdown>}
         {approvals.map((approval) => <ApprovalCard key={approval.approvalId} familyId={familyId} block={approval} />)}
         {attachments.length > 0 && <div className="flex w-full flex-col gap-2">{attachments.map((file) => <FileLink key={file.id} familyId={familyId} file={file} />)}</div>}
-        <p className="tabular-nums text-xs text-cat-overlay-1">Ronto · {time}</p>
+        <div className="message-footer"><p className="message-meta">Ronto <span aria-hidden="true">·</span> <time dateTime={DateTime.formatIso(message.createdAt)}>{time}</time></p>{text && <CopyMessage text={text} />}</div>
       </article>
     </li>
   )
@@ -1121,38 +1024,50 @@ function Message({
   const identity = message.senderType === 'external'
     ? speakerIdentity(message.externalSenderId, message.externalSenderName)
     : speakerIdentity(member?.id, member?.name)
+  const scheduled = message.senderType === 'external' && message.externalSenderId?.startsWith('schedule:') === true
+  if (scheduled) return <li>
+    <article className="chat-message scheduled-message">
+      <div className="message-meta"><CalendarDaysIcon className="size-4 shrink-0 fill-current" /><p>Scheduled task</p><time dateTime={DateTime.formatIso(message.createdAt)}>{time}</time></div>
+      <details className="scheduled-prompt"><summary><ChevronRightIcon className="size-4 shrink-0 fill-current" /><span>View task instructions</span></summary><div className="member-bubble">{text}</div></details>
+    </article>
+  </li>
   if (fromCurrentMember) return (
-    <li className="flex justify-end">
-      <article className="flex max-w-[min(42rem,88%)] flex-col items-end gap-2">
-        {text && <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-cat-mauve px-4 py-3 text-sm/6 text-cat-crust sm:text-xs/5">{text}</div>}
+    <li>
+      <article className="chat-message message-self">
+        {text && <div className="member-bubble">{text}</div>}
         {attachments.length > 0 && <div className="flex w-full flex-col gap-2">{attachments.map((file) => <FileLink key={file.id} familyId={familyId} file={file} />)}</div>}
-        <p className="tabular-nums text-xs text-cat-overlay-1">You · {time}</p>
+        <p className="message-meta">You <span aria-hidden="true">·</span> <time dateTime={DateTime.formatIso(message.createdAt)}>{time}</time></p>
       </article>
     </li>
   )
 
   return (
-    <li className="flex items-start">
-      <article className="flex max-w-[min(42rem,82%)] flex-col items-start gap-1.5">
-        <p className="flex items-baseline gap-2 text-xs">
+    <li>
+      <article className="chat-message message-other">
+        <p className="message-meta">
           <span className={cn('font-semibold', identity.color)}>{identity.name}</span>
-          {message.senderType === 'external' && <span className="rounded-full bg-cat-surface-1 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-cat-overlay-1">WhatsApp guest</span>}
-          <span className="tabular-nums text-xs text-cat-overlay-1">{time}</span>
+          {message.senderType === 'external' && <span className="message-source">WhatsApp guest</span>}
+          <time dateTime={DateTime.formatIso(message.createdAt)}>{time}</time>
         </p>
-        {text && <div className="whitespace-pre-wrap rounded-2xl rounded-tl-md bg-cat-surface-0 px-4 py-3 text-sm/6 text-cat-text ring-1 ring-cat-surface-1 sm:text-xs/5">{text}</div>}
+        {text && <div className="member-bubble">{text}</div>}
         {attachments.length > 0 && <div className="flex w-full flex-col gap-2">{attachments.map((file) => <FileLink key={file.id} familyId={familyId} file={file} />)}</div>}
       </article>
     </li>
   )
 }
 
-function EmptyConversation() {
+function EmptyConversation({ onSuggest }: { onSuggest: (prompt: string) => void }) {
   return (
-    <div className="m-auto flex max-w-md flex-col items-center gap-4 px-6 text-center">
-      <ChatBubbleLeftRightIcon className="size-4 shrink-0 fill-cat-overlay-1" />
-      <div className="flex flex-col gap-2">
-        <h2 className="text-balance text-2xl font-semibold tracking-tight text-cat-text">Start with what is on your mind</h2>
-        <p className="text-pretty text-base/7 text-cat-subtext-0 sm:text-sm/6">Ask a question, make a plan, or leave a detail here for the family.</p>
+    <div className="empty-conversation">
+      <SparklesIcon className="size-4 shrink-0 fill-accent" aria-hidden="true" />
+      <div className="empty-conversation-heading">
+        <h2>A little help with everyday life.</h2>
+        <p>Big plans, small questions, and everything your family has going on.</p>
+      </div>
+      <div className="conversation-suggestions" aria-label="Conversation starters">
+        <button type="button" onClick={() => onSuggest('Help us plan something fun for this weekend.')}><MapIcon className="size-4 shrink-0 fill-current" />Plan a weekend</button>
+        <button type="button" onClick={() => onSuggest('Help me set up a reminder for the family.')}><CalendarDaysIcon className="size-4 shrink-0 fill-current" />Set a reminder</button>
+        <button type="button" onClick={() => onSuggest('I have a family detail I’d like you to remember: ')}><BookOpenIcon className="size-4 shrink-0 fill-current" />Remember a detail</button>
       </div>
     </div>
   )
@@ -1184,16 +1099,36 @@ function MemoryEditor({ familyId, channelId, channelName, familyMemory, channelM
     ? 'Memory changed elsewhere. Reload it before saving.'
     : updateMemory.error instanceof Error ? updateMemory.error.message : null
 
-  return <>
-    <div className="flex gap-1 rounded-xl bg-cat-base p-1" role="tablist" aria-label="Memory scope">
-      <button type="button" role="tab" aria-selected={scope === 'family'} disabled={updateMemory.isPending} className={cn('min-h-11 flex-1 rounded-lg px-3 text-sm font-medium', scope === 'family' ? 'bg-cat-surface-0 text-cat-text' : 'text-cat-subtext-0 hover:text-cat-text')} onClick={() => setScope('family')}>Family</button>
-      <button type="button" role="tab" aria-selected={scope === 'channel'} disabled={updateMemory.isPending} className={cn('min-h-11 flex-1 rounded-lg px-3 text-sm font-medium', scope === 'channel' ? 'bg-cat-surface-0 text-cat-text' : 'text-cat-subtext-0 hover:text-cat-text')} onClick={() => setScope('channel')}>Channel</button>
+  return <form className="flex min-w-0 flex-col gap-5" onSubmit={(event) => {
+    event.preventDefault()
+    updateMemory.mutate({ scope, content: scope === 'family' ? familyText : channelText, revision: scope === 'family' ? familyMemory.revision : channelMemory.revision })
+  }} onKeyDown={(event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !updateMemory.isPending) {
+      event.preventDefault()
+      event.currentTarget.requestSubmit()
+    }
+  }}>
+    <div className="flex self-start rounded-lg bg-soft p-1" role="tablist" aria-label="Memory scope" onKeyDown={(event) => {
+      if (updateMemory.isPending || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      const next = event.key === 'Home' ? 'family' : event.key === 'End' ? 'channel' : scope === 'family' ? 'channel' : 'family'
+      setScope(next)
+      event.currentTarget.querySelector<HTMLButtonElement>(`#memory-${next}-tab`)?.focus()
+    }}>
+      <button id="memory-family-tab" type="button" role="tab" aria-controls="memory-scope-panel" aria-selected={scope === 'family'} tabIndex={scope === 'family' ? 0 : -1} disabled={updateMemory.isPending} className={cn('h-7 rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50 pointer-coarse:min-h-11', scope === 'family' ? 'bg-panel text-ink inset-ring inset-ring-line' : 'text-muted hover:text-ink')} onClick={() => setScope('family')}>Family</button>
+      <button id="memory-channel-tab" type="button" role="tab" aria-controls="memory-scope-panel" aria-selected={scope === 'channel'} tabIndex={scope === 'channel' ? 0 : -1} disabled={updateMemory.isPending} className={cn('h-7 rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50 pointer-coarse:min-h-11', scope === 'channel' ? 'bg-panel text-ink inset-ring inset-ring-line' : 'text-muted hover:text-ink')} onClick={() => setScope('channel')}>Channel</button>
     </div>
-    <p className="text-sm text-cat-subtext-0">{scope === 'family' ? 'Shared across every family channel.' : `Only used in ${channelName}.`}</p>
-    <Textarea aria-label={`${scope === 'family' ? 'Family' : 'Channel'} memory Markdown`} value={scope === 'family' ? familyText : channelText} onChange={(event) => scope === 'family' ? setFamilyText(event.target.value) : setChannelText(event.target.value)} className="min-h-64 flex-1 resize-y font-mono text-sm" disabled={updateMemory.isPending} />
-    {error && <p role="alert" className="text-sm text-cat-red">{error}</p>}
-    <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" onClick={() => scope === 'family' ? setFamilyText('') : setChannelText('')} disabled={updateMemory.isPending}>Clear all</Button><Button type="button" variant="secondary" onClick={onClose} disabled={updateMemory.isPending}>Cancel</Button><Button type="button" variant="primary" onClick={() => updateMemory.mutate({ scope, content: scope === 'family' ? familyText : channelText, revision: scope === 'family' ? familyMemory.revision : channelMemory.revision })} disabled={updateMemory.isPending}>Save memory</Button></div>
-  </>
+    <div id="memory-scope-panel" role="tabpanel" aria-labelledby={`memory-${scope}-tab`} className="flex min-w-0 flex-col gap-3">
+      <p id="memory-scope-description" className="text-base/7 text-muted sm:text-sm/6">{scope === 'family' ? 'The details Ronto remembers across every family channel.' : `Details Ronto only uses in ${channelName}.`}</p>
+      <Textarea name={`${scope}Memory`} aria-label={`${scope === 'family' ? 'Family' : 'Channel'} memory Markdown`} aria-describedby="memory-scope-description memory-format-help" value={scope === 'family' ? familyText : channelText} onChange={(event) => scope === 'family' ? setFamilyText(event.target.value) : setChannelText(event.target.value)} className="h-[36dvh] min-h-40 max-h-[55dvh] resize-y bg-canvas font-mono text-base/7 sm:text-sm/6" disabled={updateMemory.isPending} />
+      <p id="memory-format-help" className="text-sm/6 text-muted">Write naturally, or use Markdown to keep things organized.</p>
+    </div>
+    {error && <p role="alert" className="text-sm/6 text-danger">{error}</p>}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+      <Button variant="ghost" size="compact" onClick={() => scope === 'family' ? setFamilyText('') : setChannelText('')} disabled={updateMemory.isPending}>Clear all</Button>
+      <div className="flex gap-2"><Button variant="secondary" onClick={onClose} disabled={updateMemory.isPending}>Cancel</Button><Button type="submit" variant="primary" disabled={updateMemory.isPending}>{updateMemory.isPending ? 'Saving…' : 'Save memory'}</Button></div>
+    </div>
+  </form>
 }
 
 function MemoryDialog({ familyId, channel, onClose }: { familyId: FamilyId; channel: ChannelDto; onClose: () => void }) {
@@ -1201,12 +1136,9 @@ function MemoryDialog({ familyId, channel, onClose }: { familyId: FamilyId; chan
   const channelMemory = useQuery(channelMemoryQuery(familyId, channel.id))
   const error = familyMemory.error ?? channelMemory.error
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-cat-crust/70 p-0 sm:items-center sm:p-6" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="memory-title" className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-4 bg-cat-mantle p-5 ring-1 ring-cat-surface-1 sm:max-h-[80dvh] sm:p-6">
-        <div className="flex items-start justify-between gap-4"><div><h2 id="memory-title" className="text-xl font-semibold text-cat-text">Memory</h2><p className="text-sm text-cat-subtext-0">Canonical Markdown Ronto remembers across conversations.</p></div><Button autoFocus type="button" variant="ghost" size="icon" aria-label="Close memory" onClick={onClose}><XMarkIcon className="size-4" /></Button></div>
-        {familyMemory.isPending || channelMemory.isPending ? <p className="text-sm text-cat-subtext-0">Loading memory...</p> : error ? <p role="alert" className="text-sm text-cat-red">{error instanceof Error ? error.message : 'Unable to load memory.'}</p> : familyMemory.data && channelMemory.data ? <MemoryEditor key={`${familyMemory.data.revision}:${channelMemory.data.revision}`} familyId={familyId} channelId={channel.id} channelName={channel.name} familyMemory={familyMemory.data} channelMemory={channelMemory.data} onClose={onClose} /> : null}
-      </section>
-    </div>
+    <SettingsDialog title="Memory" description="A shared understanding, kept in your words. Review or edit the details Ronto carries between conversations." onClose={onClose}>
+      {familyMemory.isPending || channelMemory.isPending ? <p role="status" className="py-8 text-sm/6 text-muted">Loading memory…</p> : error ? <p role="alert" className="text-sm/6 text-danger">{error instanceof Error ? error.message : 'Unable to load memory.'}</p> : familyMemory.data && channelMemory.data ? <MemoryEditor key={`${familyMemory.data.revision}:${channelMemory.data.revision}`} familyId={familyId} channelId={channel.id} channelName={channel.name} familyMemory={familyMemory.data} channelMemory={channelMemory.data} onClose={onClose} /> : null}
+    </SettingsDialog>
   )
 }
 
@@ -1232,7 +1164,7 @@ function useChatData(familyId: FamilyId, requestedChannelId: ChannelId | undefin
   const channelFilesResult = useQuery(channelFilesQuery(familyId, selectedChannelId))
   const messages = messagesResult.data ?? []
   const channelFiles = channelFilesResult.data ?? []
-  const loading = channelsResult.isPending || conversationsResult.isPending || membersResult.isPending || messagesResult.isPending
+  const loading = channelsResult.isPending || conversationsResult.isPending || membersResult.isPending || (selectedId !== null && messagesResult.isPending)
   const queryError = [
     channelsResult.error,
     conversationsResult.error,
@@ -1268,23 +1200,24 @@ function ChatHeader({ selectedChannel, selectedConversation, menuButtonRef, memo
   onOpenMemory: () => void
 }) {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-cat-surface-0 bg-cat-base px-3 sm:px-5">
+    <header className="chat-header">
       <Button ref={menuButtonRef} type="button" variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation" onClick={onOpenMenu}>
         <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
         <Bars3Icon className="size-4 shrink-0 fill-current" />
       </Button>
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate text-base font-semibold text-cat-text sm:text-sm">
-          {selectedChannel?.name ?? 'Ronto'}
-        </h1>
-        {selectedChannel && <p className="truncate text-sm text-cat-subtext-0">{selectedChannel.purpose || 'Private family space'}{selectedConversation && ` · ${conversationTitle(selectedConversation)}`}</p>}
+      <div className="chat-breadcrumb">
+        <p className="breadcrumb-channel" title={selectedChannel?.purpose}>{selectedChannel?.name ?? 'Ronto'}</p>
+        <ChevronRightIcon className="size-4 shrink-0" aria-hidden="true" />
+        <h1>{selectedConversation ? conversationTitle(selectedConversation) : 'Your family space'}</h1>
       </div>
-      {selectedChannel && <Button ref={memoryButtonRef} type="button" variant="ghost" size="compact" onClick={onOpenMemory}><BookOpenIcon className="size-4" /> Memory</Button>}
+      {selectedChannel && <Button ref={memoryButtonRef} type="button" variant="ghost" size="compact" className="memory-button" aria-label="Open memory" title="Family & channel memory" onClick={onOpenMemory}><BookOpenIcon className="size-4 shrink-0 fill-current" /><span>Memory</span></Button>}
     </header>
   )
 }
 
-function ChatTimeline({ familyId, viewportRef, onContentRef, onScroll, onTouchStart, onWheel, loading, selectedId, messages, channelFiles, members, currentMemberId, showStreamDraft, pendingText, pendingFiles, showPendingAgent, pendingActivity, pendingResponse }: {
+function ChatTimeline({ familyId, viewportRef, onContentRef, onScroll, onTouchStart, onWheel, loading, selectedId, messages, channelFiles, members, currentMemberId, showStreamDraft, pendingText, pendingFiles, showPendingAgent, pendingActivity, pendingResponse, onSuggest, onCreate }: {
+  onSuggest: (prompt: string) => void
+  onCreate: (() => Promise<void>) | undefined
   familyId: FamilyId
   viewportRef: RefObject<HTMLDivElement | null>
   onContentRef: (element: HTMLDivElement | null) => void
@@ -1305,25 +1238,22 @@ function ChatTimeline({ familyId, viewportRef, onContentRef, onScroll, onTouchSt
   pendingResponse: string
 }) {
   return (
-    <div ref={viewportRef} className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" onScroll={onScroll} onTouchStart={onTouchStart} onWheel={onWheel}>
-      <div ref={onContentRef} className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-8 sm:px-8 sm:py-10">
+    <div ref={viewportRef} className="timeline-viewport" onScroll={onScroll} onTouchStart={onTouchStart} onWheel={onWheel}>
+      <div ref={onContentRef} className="timeline-content">
         {loading ? (
-          <div className="m-auto flex items-center gap-2 text-base text-cat-subtext-0 sm:text-sm">
-            <span className="size-2 animate-pulse rounded-full bg-cat-mauve" />
-            Loading
-          </div>
+          <div className="timeline-loading" role="status" aria-label="Loading conversation"><div className="skeleton-line" /><div className="skeleton-line" /><div className="skeleton-line" /></div>
         ) : selectedId === null ? (
-          <div className="m-auto text-center text-base text-cat-subtext-0">Create a session in this channel to begin.</div>
+          <div className="empty-conversation"><SparklesIcon className="size-4 shrink-0 fill-accent" aria-hidden="true" /><div className="empty-conversation-heading"><h2>A fresh space for your family.</h2><p>Start a chat to ask a question, make a plan, or share what’s on your mind.</p></div><Button variant="primary" disabled={onCreate === undefined} onClick={() => { void onCreate?.().catch(() => undefined) }}>Start a chat</Button></div>
         ) : messages.length === 0 && pendingText === null && pendingFiles.length === 0 ? (
-          <EmptyConversation />
+          <EmptyConversation onSuggest={onSuggest} />
         ) : (
-          <ul className="flex flex-col gap-6" role="list">
+          <ul className="message-list" role="list">
             {messages.map((message) => <Message key={message.id} familyId={familyId} message={message} files={channelFiles} members={members} currentMemberId={currentMemberId} />)}
             {((showStreamDraft && (pendingText !== null || pendingFiles.length > 0)) || showPendingAgent) && (
               <li className="flex flex-col gap-6">
                 {showStreamDraft && (pendingText !== null || pendingFiles.length > 0) && <div className="flex justify-end">
                   <div className="flex max-w-[min(42rem,88%)] flex-col items-end gap-2">
-                    {pendingText && <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-cat-mauve px-4 py-3 text-sm/6 text-cat-crust sm:text-xs/5">{pendingText}</div>}
+                    {pendingText && <div className="member-bubble">{pendingText}</div>}
                     {pendingFiles.map((file) => <FileLink key={file.id} familyId={familyId} file={file} />)}
                   </div>
                 </div>}
@@ -1337,68 +1267,6 @@ function ChatTimeline({ familyId, viewportRef, onContentRef, onScroll, onTouchSt
         )}
       </div>
     </div>
-  )
-}
-
-function ChatComposer({ selectedId, sending, selectedIsWorking, selectedFiles, fileInputRef, errorMessage, onSubmit, onComposerKeyDown, onFilesSelected, onRemoveFile, onStopResponse }: {
-  selectedId: ConversationId | null
-  sending: boolean
-  selectedIsWorking: boolean
-  selectedFiles: ReadonlyArray<File>
-  fileInputRef: RefObject<HTMLInputElement | null>
-  errorMessage: string | null | undefined
-  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
-  onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
-  onFilesSelected: (files: ReadonlyArray<File>) => void
-  onRemoveFile: (index: number) => void
-  onStopResponse: () => Promise<void>
-}) {
-  return (
-    <footer className="shrink-0 border-t border-cat-surface-0 bg-cat-base p-3 sm:p-5">
-      <form className="mx-auto flex max-w-4xl flex-col gap-2" onSubmit={onSubmit}>
-        {selectedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2" aria-label="Selected attachments">
-            {selectedFiles.map((file, index) => (
-              <div key={`${file.name}-${file.lastModified}`} className="flex min-h-11 max-w-full items-center gap-2 rounded-xl bg-cat-surface-0 px-3 text-sm text-cat-text ring-1 ring-cat-surface-1">
-                <DocumentIcon className="size-4 shrink-0 fill-cat-peach" />
-                <span className="truncate">{file.name}</span>
-                <button type="button" aria-label={`Remove ${file.name}`} className="grid size-8 shrink-0 place-items-center rounded-lg text-cat-subtext-0 hover:bg-cat-surface-1 hover:text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender" onClick={() => onRemoveFile(index)}>
-                  <XMarkIcon className="size-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="sr-only"
-            tabIndex={-1}
-            onChange={(event) => {
-              onFilesSelected(Array.from(event.target.files ?? []))
-              event.target.value = ''
-            }}
-          />
-          <Button type="button" variant="ghost" size="icon" aria-label="Attach files" disabled={selectedId === null || sending || selectedIsWorking} onClick={() => fileInputRef.current?.click()}>
-            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-            <PaperClipIcon className="size-4 shrink-0 fill-current" />
-          </Button>
-          <Textarea name="message" aria-label="Message Ronto" placeholder={selectedId === null ? 'Create a session to begin' : 'Message Ronto'} rows={1} disabled={selectedId === null || sending || selectedIsWorking} onKeyDown={onComposerKeyDown} />
-          <Button type={selectedIsWorking ? 'button' : 'submit'} variant="primary" size="icon" aria-label={selectedIsWorking ? 'Stop response' : 'Send message'} disabled={selectedId === null} onClick={selectedIsWorking ? () => void onStopResponse() : undefined}>
-            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-            {selectedIsWorking ? <StopIcon className="size-4 shrink-0 fill-current" /> : <PaperAirplaneIcon className="size-4 shrink-0 fill-current" />}
-          </Button>
-        </div>
-      </form>
-      {errorMessage && (
-        <div className="mx-auto flex max-w-4xl items-start gap-2 pt-2 text-cat-red">
-          <ChevronLeftIcon className="size-4 h-lh shrink-0 rotate-180 fill-current" />
-          <p role="alert" className="text-base/7 sm:text-sm/6">{errorMessage}</p>
-        </div>
-      )}
-    </footer>
   )
 }
 
@@ -1435,6 +1303,7 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
   const [pendingMemberMessageId, setPendingMemberMessageId] = useState<MessageDto['id'] | null>(null)
   const [pendingFiles, setPendingFiles] = useState<ReadonlyArray<ChannelFile>>([])
   const [selectedFiles, setSelectedFiles] = useState<ReadonlyArray<File>>([])
+  const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -1448,11 +1317,10 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
   const bottomChaseFrame = useRef<number | null>(null)
   const bottomChaseLastTop = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
+  const composerTextarea = useRef<HTMLTextAreaElement>(null)
   const menuButton = useRef<HTMLButtonElement>(null)
   const memoryButton = useRef<HTMLButtonElement>(null)
-  const familyButton = useRef<HTMLButtonElement>(null)
-  const whatsappButton = useRef<HTMLButtonElement>(null)
-  const connectorsButton = useRef<HTMLButtonElement>(null)
+  const settingsButton = useRef<HTMLButtonElement>(null)
   const activeTurn = useRef<AbortController | null>(null)
 
   function cancelBottomChase() {
@@ -1817,7 +1685,7 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       event.currentTarget.form?.requestSubmit()
     }
@@ -1834,14 +1702,17 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
     return <Navigate to="/" search={{ ...search, channel: selectedChannel.id, conversation: selected?.id }} replace />
 
   return (
-    <main className="isolate flex h-dvh overflow-hidden bg-cat-base antialiased">
-      <Sidebar
+    <main className="ronto-workspace isolate flex h-dvh overflow-hidden bg-canvas antialiased">
+      <WorkspaceSidebar
         channels={channels}
         conversations={channelConversations}
         selectedChannelId={selectedChannelId}
         selectedId={selectedId}
         workingConversationId={selectedIsWorking || (sending && showStreamDraft) ? selectedId : null}
-        userName={me.user.name}
+        me={me}
+        familyId={familyId}
+        onSelectFamily={(id) => { void navigate({ search: { family: id } }) }}
+        onOpenPlatform={() => { void navigate({ search: { platform: true } }) }}
         isPrimary={membership.member.role === 'primary'}
         mobileOpen={mobileOpen}
         onClose={closeMobileSidebar}
@@ -1866,25 +1737,15 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
         onManageFamily={() => setFamilyOpen(true)}
         onManageWhatsapp={() => setWhatsappOpen(true)}
         onManageConnectors={() => setConnectorsOpen(true)}
-        manageButtonRef={familyButton}
-        whatsappButtonRef={whatsappButton}
-        connectorsButtonRef={connectorsButton}
+        settingsButtonRef={settingsButton}
       />
 
-      <section className="flex min-w-0 flex-1 flex-col" inert={mobileOpen || undefined}>
-        <div className="flex flex-wrap items-center gap-2 border-b border-cat-surface-0 px-4 py-2">
-          <label htmlFor="active-family" className="text-sm text-cat-subtext-0">Family</label>
-          <select id="active-family" className="min-h-11 min-w-0 max-w-full rounded-lg bg-cat-mantle px-3 text-base text-cat-text focus-visible:outline-2 focus-visible:outline-cat-lavender" value={familyId} onChange={(event) => {
-            const next = me.memberships.find(({ family }) => family.id === event.target.value)
-            if (next) void navigate({ search: { family: next.family.id } })
-          }}>
-            {me.memberships.map(({ family }) => <option key={family.id} value={family.id}>{family.name}</option>)}
-          </select>
-          {me.isPlatformAdministrator && <Button type="button" variant="ghost" onClick={() => void navigate({ search: { platform: true } })}>Platform administration</Button>}
-        </div>
+      <section className="chat-workspace" inert={mobileOpen || undefined}>
         <ChatHeader selectedChannel={selectedChannel} selectedConversation={selected} menuButtonRef={menuButton} memoryButtonRef={memoryButton} onOpenMenu={() => setMobileOpen(true)} onOpenMemory={() => setMemoryOpen(true)} />
 
         <ChatTimeline
+          onSuggest={(prompt) => { setDraft(prompt); composerTextarea.current?.focus() }}
+          onCreate={selectedChannelId === null ? undefined : createConversation}
           viewportRef={timelineViewport}
           onContentRef={setTimelineContent}
           onScroll={(event) => {
@@ -1917,12 +1778,12 @@ function ChatShell({ me, membership, onSessionExpired }: { me: MeDto; membership
           pendingResponse={pendingResponse}
         />
 
-        <ChatComposer selectedId={selectedId} sending={sending} selectedIsWorking={selectedIsWorking} selectedFiles={selectedFiles} fileInputRef={fileInput} errorMessage={error ?? queryError} onSubmit={send} onComposerKeyDown={handleComposerKeyDown} onFilesSelected={setSelectedFiles} onRemoveFile={(index) => setSelectedFiles((current) => current.filter((_, at) => at !== index))} onStopResponse={stopResponse} />
+        <ChatComposer selectedId={selectedId} sending={sending} selectedIsWorking={selectedIsWorking} selectedFiles={selectedFiles} fileInputRef={fileInput} textareaRef={composerTextarea} draft={draft} onDraftChange={setDraft} errorMessage={error ?? queryError} onSubmit={send} onComposerKeyDown={handleComposerKeyDown} onFilesSelected={setSelectedFiles} onRemoveFile={(index) => setSelectedFiles((current) => current.filter((_, at) => at !== index))} onStopResponse={stopResponse} />
       </section>
       {memoryOpen && selectedChannel && <MemoryDialog familyId={familyId} channel={selectedChannel} onClose={() => { setMemoryOpen(false); requestAnimationFrame(() => memoryButton.current?.focus()) }} />}
-      {familyOpen && <FamilyDialog familyId={familyId} channels={channels} onClose={() => { setFamilyOpen(false); requestAnimationFrame(() => familyButton.current?.focus()) }} />}
-      {whatsappOpen && <WhatsappDialog familyId={familyId} conversationId={selectedId} isPrimary={membership.member.role === 'primary'} onClose={() => { setWhatsappOpen(false); requestAnimationFrame(() => whatsappButton.current?.focus()) }} />}
-      {connectorsOpen && <ConnectorsDialog familyId={familyId} onClose={() => { setConnectorsOpen(false); requestAnimationFrame(() => connectorsButton.current?.focus()) }} />}
+      {familyOpen && <FamilyDialog familyId={familyId} channels={channels} onClose={() => { setFamilyOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
+      {whatsappOpen && <WhatsappDialog familyId={familyId} conversationId={selectedId} isPrimary={membership.member.role === 'primary'} onClose={() => { setWhatsappOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
+      {connectorsOpen && <ConnectorsDialog familyId={familyId} onClose={() => { setConnectorsOpen(false); requestAnimationFrame(() => settingsButton.current?.focus()) }} />}
     </main>
   )
 }
@@ -1952,23 +1813,26 @@ function FamilyChooser({ me, unavailable, onSelect, onSignOut }: {
   onSignOut: () => Promise<void>
 }) {
   return (
-    <main className="isolate flex min-h-dvh items-center justify-center bg-cat-crust p-6">
-      <section className="flex w-full max-w-lg flex-col gap-5 bg-cat-mantle p-7 ring-1 ring-cat-surface-1 sm:p-10">
-        <Brand />
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold text-cat-text">Choose a family</h1>
-          <p className="text-base/7 text-cat-subtext-0 sm:text-sm/6">
+    <main className="isolate flex min-h-dvh flex-col bg-canvas px-6 py-6 text-ink sm:px-10 sm:py-10">
+      <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4"><Brand /><Button variant="ghost" size="compact" onClick={() => void onSignOut()}>Sign out</Button></header>
+      <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-7 py-12 sm:py-20">
+        <div className="flex flex-col gap-3">
+          <h1 className="text-3xl font-medium tracking-tight text-balance">A familiar place to begin.</h1>
+          <p className="text-base/7 text-muted sm:text-sm/6">
             {unavailable ? 'That family is unavailable to this account. Choose one you belong to.' : 'Choose the family you want to open.'}
           </p>
         </div>
-        <div className="flex flex-col gap-2">
-          {me.memberships.map(({ family }) => (
-            <Button key={family.id} type="button" variant="outline" className="min-h-11 justify-start" onClick={() => onSelect(family.id)}>
-              {family.name}
-            </Button>
+        <ul role="list" aria-label="Your families" className="flex flex-col gap-2">
+          {me.memberships.map(({ family, member }) => (
+            <li key={family.id}>
+              <button type="button" className="flex min-h-18 w-full items-center justify-between gap-4 rounded-xl border border-line-strong bg-panel p-4 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" onClick={() => onSelect(family.id)}>
+                <div className="flex min-w-0 flex-col gap-1"><p className="break-words text-base font-medium">{family.name}</p><p className="text-sm text-muted">{member.role === 'primary' ? 'Primary member' : 'Family member'}</p></div>
+                <ArrowRightIcon aria-hidden="true" className="size-4 shrink-0 fill-muted" />
+              </button>
+            </li>
           ))}
-        </div>
-        <Button type="button" variant="secondary" onClick={() => void onSignOut()}>Sign out</Button>
+        </ul>
+        <p className="break-words text-sm/6 text-muted">Signed in as {me.user.email}.</p>
       </section>
     </main>
   )
